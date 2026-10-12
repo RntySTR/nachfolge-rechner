@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Nachfolge">
+  <title>Nachfolge-Rechner</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2300678b'/%3E%3Cpath d='M9 22V10h3l8 9v-9h3v12h-3l-8-9v9z' fill='white'/%3E%3C/svg%3E">
+  <link rel="preload" href="fonts/space-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app">
+    <nav class="nav" aria-label="Hauptnavigation">
+      <div class="brandmark"><span class="mark">N</span><span class="wort">Nachfolge-Rechner<small>Steuern und Kosten der Vermögensnachfolge</small></span></div>
+      <button type="button" class="fallwahl" id="fallwahl" data-act="faelle" aria-label="Fälle verwalten"></button>
+      <ul class="navlist" id="navlist"></ul>
+      <div class="spacer"></div>
+      <div class="navfoot">
+        <button type="button" class="btn ghost klein" data-act="info">Über den Rechner</button>
+      </div>
+    </nav>
+    <div class="main">
+      <div class="mobilkopf"><b id="mobil-titel" style="font:500 16px/1.2 var(--font-display);color:var(--ink)"></b><button type="button" class="btn klein" data-act="faelle">Fälle</button></div>
+      <main class="content" id="content"></main>
+      <footer class="impressum">
+        <span><b>Dr. Robert Tinnefeld</b></span>
+        <span>Interne Anwendung, keine Rechts- oder Steuerberatung</span>
+        <span>Alle Eingaben bleiben in diesem Browser</span>
+      </footer>
+    </div>
+  </div>
+
+  <div class="sheet-hg" data-act="sheet-schliessen"></div>
+  <aside class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-titel">
+    <div class="sheet-kopf"><h2 id="sheet-titel"></h2><button type="button" class="iconbtn" data-act="sheet-schliessen" aria-label="Schließen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="sheet-inhalt" id="sheet-inhalt"></div>
+    <div class="sheet-fuss" id="sheet-fuss"></div>
+  </aside>
+
+  <input type="file" id="import-datei" accept="application/json,.json" hidden>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
