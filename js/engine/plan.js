@@ -216,10 +216,14 @@ function lastAusRechten(st, pos, rechte, an, datum, anteil) {
   }
 }
 
-// ---------------------------------------------------------------- Erwerbe buchen
+// ---------------------------------------------------------------- Erwerbe und Kosten buchen
+
+function kostenBuchen(st, k) {
+  st.kosten.push({ ereignis: st.ereignis, ...k });
+}
 
 function bucheErwerb(st, erwerb) {
-  const e = berechneErwerb(st.fall, { id: neueId('erw'), ...erwerb }, st.erwerbe);
+  const e = berechneErwerb(st.fall, { id: neueId('erw'), ereignis: st.ereignis, ...erwerb }, st.erwerbe);
   st.erwerbe.push(e);
   return e;
 }
@@ -238,7 +242,8 @@ function schenkung(st, s) {
   const { fall } = st;
   const von = s.von;
   if (!st.lebend.has(von)) {
-    hinweis(st, 'warnung', 'Schritt übersprungen', `„${s.titel || 'Schenkung'}“ am ${s.datum}: ${name(fall, von)} ist zu diesem Zeitpunkt nach der Annahme bereits verstorben.`);
+    hinweis(st, 'warnung', 'Schritt übersprungen', `„${s.titel || 'Schenkung'}“ am ${fmtDatum(s.datum)}: ${name(fall, von)} ist zu diesem Zeitpunkt nach der Annahme bereits verstorben.`);
+    st.zeitachse.push({ ereignis: st.ereignis, schrittId: s.id, datum: s.datum, typ: 'schenkung', titel: s.titel || 'Schenkung', text: 'Übersprungen: Schenker nach der Annahme bereits verstorben', uebersprungen: true });
     return;
   }
   const empf = empfaengerListe(s).filter((e) => e.personId && e.anteil > 0);
@@ -451,12 +456,12 @@ function schenkung(st, s) {
     if (s.rueckforderungsrecht && immob.length) {
       gericht.push({ kv: '14150', text: 'Vormerkung Rückforderungsrecht', wert: summe(immob, (t) => vw(t.a) * t.q) * 0.5, satz: 0.5 });
     }
-    st.kosten.push({
+    kostenBuchen(st, {
       datum: s.datum, schrittId: s.id,
       ...urkunde({ titel: s.titel || 'Überlassungsvertrag', notar, gericht, grundbuchabrufe: 2 * (immob.length + sachImmob.length) })
     });
   }
-  st.zeitachse.push({ datum: s.datum, typ: 'schenkung', titel: s.titel || 'Schenkung', text: beschreibeSchenkung(st, s, teile, verteilung, nutzung) });
+  st.zeitachse.push({ ereignis: st.ereignis, schrittId: s.id, datum: s.datum, typ: 'schenkung', titel: s.titel || 'Schenkung', text: beschreibeSchenkung(st, s, teile, verteilung, nutzung) });
 }
 
 function beschreibeSchenkung(st, s, teile, verteilung, nutzung) {
@@ -543,10 +548,10 @@ function gueterstand(st, s) {
   const rueckkehr = s.rueckkehr !== false;
   const eineUrkunde = s.urkunden === 'eine';
   if (rueckkehr && eineUrkunde) notar1[0].text = 'Ehevertrag (Gütertrennung, Ausgleich, Neubegründung Zugewinngemeinschaft)';
-  st.kosten.push({ datum: s.datum, schrittId: s.id, ...urkunde({ titel: 'Ehevertrag: Güterstandswechsel', notar: notar1, gericht: gericht1, grundbuchabrufe: gericht1.length * 2 }) });
+  kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: 'Ehevertrag: Güterstandswechsel', notar: notar1, gericht: gericht1, grundbuchabrufe: gericht1.length * 2 }) });
   if (rueckkehr && !eineUrkunde) {
     const d2 = s.datumRueckkehr || addJahre(s.datum, 1 / 12);
-    st.kosten.push({ datum: d2, schrittId: s.id, ...urkunde({ titel: 'Ehevertrag: Rückkehr zur Zugewinngemeinschaft', notar: [{ kv: '21100', text: 'Ehevertrag (Zugewinngemeinschaft)', wert: wert100, satz: 2.0, min: 120 }] }) });
+    kostenBuchen(st, { datum: d2, schrittId: s.id, ...urkunde({ titel: 'Ehevertrag: Rückkehr zur Zugewinngemeinschaft', notar: [{ kv: '21100', text: 'Ehevertrag (Zugewinngemeinschaft)', wert: wert100, satz: 2.0, min: 120 }] }) });
   }
   if (rueckkehr && eineUrkunde) {
     hinweis(st, 'risiko', 'Schaukel in einer Urkunde', 'Gütertrennung und Rückkehr zur Zugewinngemeinschaft in derselben Urkunde erhöhen das Risiko, dass die Finanzverwaltung den Ausgleich als freigebig ansieht. Getrennte Urkunden mit zeitlichem Abstand sind vorzugswürdig.', { norm: '§ 5 Abs. 2 ErbStG' });
@@ -562,7 +567,7 @@ function gueterstand(st, s) {
     st.gueterstand = 'guetertrennung';
   }
   st.zeitachse.push({
-    datum: s.datum, typ: 'gueterstand', titel: s.titel || 'Güterstandsschaukel',
+    ereignis: st.ereignis, schrittId: s.id, datum: s.datum, typ: 'gueterstand', titel: s.titel || 'Güterstandsschaukel',
     text: `Ausgleich ${fmtEuro(forderung)} von ${name(fall, schuldner)} an ${name(fall, glaeubiger)} (steuerfrei)${rueckkehr ? ', danach wieder Zugewinngemeinschaft' : ', danach Gütertrennung'}`
   });
   void vorher;
@@ -604,7 +609,7 @@ function verzicht(st, s) {
   }
   const a = alter(personMap(fall).get(ber)?.geburt, s.datum);
   const jw = summe(rechte, (r) => r.jahreswertJeQuote * r.quote);
-  st.kosten.push({
+  kostenBuchen(st, {
     datum: s.datum, schrittId: s.id,
     ...urkunde({
       titel: 'Verzicht auf Nießbrauch / Löschung',
@@ -613,7 +618,7 @@ function verzicht(st, s) {
       grundbuchabrufe: 1
     })
   });
-  st.zeitachse.push({ datum: s.datum, typ: 'verzicht', titel: s.titel || 'Verzicht auf Nießbrauch', text: `${name(fall, ber)} verzichtet; Kapitalwert ${fmtEuro(kwSumme)}` });
+  st.zeitachse.push({ ereignis: st.ereignis, schrittId: s.id, datum: s.datum, typ: 'verzicht', titel: s.titel || 'Verzicht auf Nießbrauch', text: `${name(fall, ber)} verzichtet; Kapitalwert ${fmtEuro(kwSumme)}` });
 }
 
 // ---------------------------------------------------------------- Schritt: Verfügung von Todes wegen
@@ -639,7 +644,7 @@ function verfuegung(st, s) {
     : [{ kv: '21100', text: form === 'erbvertrag' ? 'Erbvertrag' : 'Gemeinschaftliches Testament', wert, satz: 2.0, min: 120 }];
   const sonstige = [{ text: `Registrierung Zentrales Testamentsregister (${slots.length}×)`, betrag: R.gnotkg.ztr * slots.length }];
   const gericht = form === 'erbvertrag' ? [] : [{ kv: '12100', text: 'Amtliche Verwahrung', betrag: R.gnotkg.testamentVerwahrung }];
-  st.kosten.push({ datum: s.datum, schrittId: s.id, ...urkunde({ titel: form === 'erbvertrag' ? 'Erbvertrag' : form === 'einzeltestament' ? 'Testament' : 'Gemeinschaftliches Testament', notar, gericht, sonstige }) });
+  kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: form === 'erbvertrag' ? 'Erbvertrag' : form === 'einzeltestament' ? 'Testament' : 'Gemeinschaftliches Testament', notar, gericht, sonstige }) });
   if (s.pflichtteilsverzicht?.length) {
     for (const pid of s.pflichtteilsverzicht) {
       const wertPv = summe(slots, (sl) => {
@@ -647,10 +652,10 @@ function verfuegung(st, s) {
         const lebendOhne = new Set([...st.lebend].filter((x) => x !== id));
         return pflichtteilsquote(fall, id, pid, lebendOhne, st.gueterstand) * Math.max(0, vermoegenVon(st, id));
       });
-      st.kosten.push({ datum: s.datum, schrittId: s.id, ...urkunde({ titel: `Pflichtteilsverzicht ${name(fall, pid)}`, notar: [{ kv: '21100', text: 'Pflichtteilsverzichtsvertrag', wert: wertPv, satz: 2.0, min: 120 }] }) });
+      kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: `Pflichtteilsverzicht ${name(fall, pid)}`, notar: [{ kv: '21100', text: 'Pflichtteilsverzichtsvertrag', wert: wertPv, satz: 2.0, min: 120 }] }) });
     }
   }
-  st.zeitachse.push({ datum: s.datum, typ: 'verfuegung', titel: s.titel || (form === 'erbvertrag' ? 'Erbvertrag' : 'Testament'), text: beschreibeVerfuegungen(st, slots) });
+  st.zeitachse.push({ ereignis: st.ereignis, schrittId: s.id, datum: s.datum, typ: 'verfuegung', titel: s.titel || (form === 'erbvertrag' ? 'Erbvertrag' : 'Testament'), text: beschreibeVerfuegungen(st, slots) });
 }
 
 export function beschreibeVerfuegung(fall, v) {
@@ -790,7 +795,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
       lastenErben.push({ text: 'Pflichtteil Ehegatte', betrag: pt, norm: '§ 10 Abs. 5 Nr. 2 ErbStG' });
       zahlungen.push([ehe, pt, 'Pflichtteil']);
     }
-    st.kosten.push({ datum, ...urkunde({ titel: 'Ausschlagung der Erbschaft', notar: [{ kv: '21201', text: 'Ausschlagungserklärung', wert: Math.max(0, nachlassVW * 0.5), satz: 0.5, min: 30 }] }) });
+    kostenBuchen(st, { datum, ...urkunde({ titel: 'Ausschlagung der Erbschaft', notar: [{ kv: '21201', text: 'Ausschlagungserklärung', wert: Math.max(0, nachlassVW * 0.5), satz: 0.5, min: 30 }] }) });
     hinweis(st, 'info', 'Güterrechtliche Lösung', `${name(fall, ehe)} schlägt aus und erhält den tatsächlichen Zugewinnausgleich steuerfrei sowie den kleinen Pflichtteil. Frist: 6 Wochen ab Kenntnis (§ 1944 BGB).`, { norm: '§ 1371 Abs. 3 BGB, § 5 Abs. 2 ErbStG' });
   }
 
@@ -825,12 +830,15 @@ function erbfall(st, erblasser, datum, optionen = {}) {
     // Vermächtnisse im Ehegattentestament gelten regelmäßig nur für den ersten Erbfall
     const nurErster = vm.nurErsterErbfall ?? (vm.typ === 'freibetrag' || vm.typ === 'niessbrauch');
     if (nurErster && !eheLebt) continue;
+    if (vm.nurSchlusserbfall && eheLebt) continue;
     if (vm.typ === 'gegenstand') {
       const n = nachlass.find((x) => x.asset.id === vm.assetId);
       if (!n) { hinweis(st, 'warnung', 'Vermächtnis ins Leere', `Der vermachte Gegenstand gehört beim Tod von ${name(fall, erblasser)} nicht (mehr) zum Nachlass.`); continue; }
       const q = n.q * Math.min(1, Number(vm.quote ?? 1));
+      const gew = vm.anteile ? normiere(Object.fromEntries(bedachte.map((id) => [id, Number(vm.anteile[id]) || 0]))) : null;
       for (const an of bedachte) {
-        const qa = q / bedachte.length;
+        const qa = gew ? q * (gew[an] || 0) : q / bedachte.length;
+        if (qa <= EPS) continue;
         if (!vermachteAnteile.has(n.asset.id)) vermachteAnteile.set(n.asset.id, []);
         vermachteAnteile.get(n.asset.id).push({ an, q: qa });
         const pos = position(st, { asset: n.asset, quote: qa, an, von: erblasser, datum, erbfall: true, text: `Vermächtnis: ${n.asset.bezeichnung}` });
@@ -838,7 +846,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
         addVm(an, pos);
       }
       if (istImmobilie(n.asset)) {
-        st.kosten.push({
+        kostenBuchen(st, {
           datum, ...urkunde({
             titel: `Vermächtniserfüllung „${n.asset.bezeichnung}“`,
             notar: [{ kv: v.form === 'privatschriftlich' ? '21100' : '21102', text: 'Auflassung zur Vermächtniserfüllung', wert: vw(n.asset) * q, satz: v.form === 'privatschriftlich' ? 2.0 : 1.0, min: 60 }],
@@ -878,6 +886,15 @@ function erbfall(st, erblasser, datum, optionen = {}) {
   if (geldVm.length) {
     const vermachtWert = summe([...vermachteAnteile.entries()], ([id, xs]) => vw(st.vermoegen.get(id)) * summe(xs, (x) => x.q));
     const verfuegbar = Math.max(0, nachlassVW - summe(lastenErben, (l) => l.betrag) - vermachtWert);
+    // optionaler Höchstanteil am Nachlass (z. B. zur Absicherung des Längerlebenden)
+    for (const vmx of new Set(geldVm.map((g) => g.vm))) {
+      const anteil = Number(vmx.maxNachlassAnteil);
+      if (!(anteil > 0 && anteil < 1)) continue;
+      const teil = geldVm.filter((g) => g.vm === vmx);
+      const s = summe(teil, (g) => g.betrag);
+      const grenze = Math.max(0, nachlassVW * anteil);
+      if (s > grenze) teil.forEach((g) => (g.betrag = (g.betrag * grenze) / s));
+    }
     const gewuenscht = summe(geldVm.filter((g) => g.vm.faelligkeit !== 'tod_beschwerter'), (g) => g.betrag);
     const faktor = gewuenscht > verfuegbar && gewuenscht > 0 ? verfuegbar / gewuenscht : 1;
     if (faktor < 1) {
@@ -1006,11 +1023,11 @@ function erbfall(st, erblasser, datum, optionen = {}) {
   const notariell = v.form === 'notariell' || (v.typ && v.typ !== 'gesetzlich' && v.form !== 'privatschriftlich');
   const hatImmobilie = nachlass.some((n) => istImmobilie(n.asset));
   if (v.typ && v.typ !== 'gesetzlich') {
-    st.kosten.push({ datum, ...urkunde({ titel: `Eröffnung der Verfügung von Todes wegen (${name(fall, erblasser)})`, gericht: [{ kv: '12101', text: 'Eröffnung', betrag: R.gnotkg.eroeffnung }] }) });
+    kostenBuchen(st, { datum, ...urkunde({ titel: `Eröffnung der Verfügung von Todes wegen (${name(fall, erblasser)})`, gericht: [{ kv: '12101', text: 'Eröffnung', betrag: R.gnotkg.eroeffnung }] }) });
   }
   if (hatImmobilie && !notariell) {
     const wert = Math.max(0, nachlassVW);
-    st.kosten.push({
+    kostenBuchen(st, {
       datum, ...urkunde({
         titel: `Erbschein (${name(fall, erblasser)})`,
         notar: [{ kv: '23300', text: 'Eidesstattliche Versicherung / Erbscheinsantrag', wert, satz: 1.0 }],
@@ -1022,7 +1039,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
 
   st.lebend.delete(erblasser);
   st.zeitachse.push({
-    datum, typ: 'erbfall', titel: `Erbfall ${name(fall, erblasser)}`,
+    ereignis: st.ereignis, erblasser, datum, typ: 'erbfall', titel: `Erbfall ${name(fall, erblasser)}`,
     text: `${Object.entries(quoten).map(([id, q]) => `${name(fall, id)} ${fmtQuote(q)}`).join(', ') || 'keine Erben'}${ausschlagung ? ' · Ausschlagung Ehegatte' : ''}`
   });
 }
@@ -1138,11 +1155,13 @@ export function simuliere(fall, szenario, optionen = {}) {
   for (const ev of ereignisse) {
     if (ev.art === 'schritt') {
       const s = ev.s;
+      st.ereignis = `schritt:${s.id}`;
       if (s.typ === 'schenkung') schenkung(st, s);
       else if (s.typ === 'gueterstand') gueterstand(st, s);
       else if (s.typ === 'verzicht') verzicht(st, s);
       else if (s.typ === 'verfuegung') verfuegung(st, s);
     } else {
+      st.ereignis = `tod:${ev.g}`;
       erbfall(st, ev.g, ev.datum, erster ? szenario.erbfallOptionen || {} : { pflichtteil: [] });
       erster = false;
     }

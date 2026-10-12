@@ -17,9 +17,9 @@ export function bereicherung(erwerb) {
   const abzuege = summe(erwerb.abzuege || [], (a) => a.betrag);
   return {
     wert,
-    befreiungen,
-    lasten,
-    abzuege,
+    befreiungenSumme: befreiungen,
+    lastenSumme: lasten,
+    abzuegeSumme: abzuege,
     bereicherung: Math.max(0, wert - befreiungen - lasten - abzuege)
   };
 }

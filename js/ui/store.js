@@ -12,6 +12,9 @@ export const state = {
   szenarioId: null,
   detail: { szenarioId: null, reihenfolge: 'gewichtet', tab: 'zeitachse', offen: {} },
   sheet: null,
+  offenSz: {},
+  szReihenfolge: null,
+  vorschlaegeOffen: true,
   speicherFehler: false
 };
 
@@ -63,6 +66,11 @@ export function migriere(f) {
   f.szenarien = f.szenarien || [];
   if (!f.szenarien.some((s) => s.basis)) f.szenarien.unshift({ id: neueId('sz'), name: 'Ohne Gestaltung', basis: true, schritte: [], erbfallOptionen: {} });
   for (const s of f.szenarien) { s.schritte = s.schritte || []; s.erbfallOptionen = s.erbfallOptionen || {}; }
+  // Unplausible Datumswerte (z. B. Jahr 0019 aus der früheren Datumseingabe) verwerfen
+  const ok = (d) => !d || (/^\d{4}-\d{2}-\d{2}$/.test(d) && Number(d.slice(0, 4)) >= 1880);
+  for (const p of f.personen || []) if (!ok(p.geburt)) p.geburt = '';
+  if (!ok(f.heirat)) f.heirat = '';
+  if (!ok(f.stichtag) || !f.stichtag) f.stichtag = new Date().toISOString().slice(0, 10);
   return f;
 }
 

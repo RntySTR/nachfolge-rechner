@@ -141,3 +141,21 @@ test('Teilentgeltliche Zuwendung mit Nießbrauch und Weiterschenkung', () => {
   assert.ok(r.hinweise.some((h) => h.titel === 'Kettenschenkungsrisiko'));
   assert.ok(r.hinweise.some((h) => h.titel === 'Teilentgeltliche Übertragung'));
 });
+
+test('Vorschläge senken die Belastung und erreichen das Ziel', async () => {
+  const { vorschlaege } = await import('../js/engine/strategien.js');
+  const fall = beispielfall();
+  const v = vorschlaege(fall);
+  assert.ok(v.liste.length > 0);
+  assert.ok(v.liste[0].ersparnis > 0);
+  assert.ok(v.liste[0].ergebnis.erwartet < v.basis.erwartet);
+  assert.notEqual(v.liste[0].ergebnis.ziel[0].erfuellt, false);
+});
+
+test('Datumseingabe', async () => {
+  const { parseDatum } = await import('../js/ui/format.js');
+  assert.equal(parseDatum('22031949'), '1949-03-22');
+  assert.equal(parseDatum('8.4.1950'), '1950-04-08');
+  assert.equal(parseDatum('31.02.2020'), null);
+  assert.equal(parseDatum('0019'), null);
+});

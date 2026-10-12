@@ -55,3 +55,29 @@ export function initialen(name) {
 export function prozent(x, stellen = 0) {
   return `${(x * 100).toLocaleString('de-DE', { maximumFractionDigits: stellen })} %`;
 }
+
+/**
+ * Datumseingabe → ISO-Datum. Akzeptiert „22.3.1949“, „22.03.49“, „22031949“, „1949-03-22“.
+ * Zweistellige Jahre: bis zum laufenden Jahr 20xx, sonst 19xx. Gibt null bei ungültiger Eingabe zurück.
+ */
+export function parseDatum(s) {
+  const t = String(s ?? '').trim();
+  if (!t) return '';
+  let d, m, y;
+  let r;
+  if ((r = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [, y, m, d] = r;
+  else if ((r = t.match(/^(\d{1,2})[.\/ -](\d{1,2})[.\/ -](\d{2}|\d{4})$/))) [, d, m, y] = r;
+  else if ((r = t.match(/^(\d{2})(\d{2})(\d{4})$/))) [, d, m, y] = r;
+  else if ((r = t.match(/^(\d{2})(\d{2})(\d{2})$/))) [, d, m, y] = r;
+  else return null;
+  let jahr = Number(y);
+  if (y.length === 2) {
+    const jetzt = new Date().getFullYear() % 100;
+    jahr += jahr <= jetzt ? 2000 : 1900;
+  }
+  const monat = Number(m), tag = Number(d);
+  if (jahr < 1880 || jahr > 2200 || monat < 1 || monat > 12 || tag < 1) return null;
+  const letzter = new Date(Date.UTC(jahr, monat, 0)).getUTCDate();
+  if (tag > letzter) return null;
+  return `${jahr}-${String(monat).padStart(2, '0')}-${String(tag).padStart(2, '0')}`;
+}

@@ -2,10 +2,10 @@
 
 import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispielLaden, fallDuplizieren, fallLoeschen, exportieren, importieren, personEntfernen, vermoegenEntfernen } from './ui/store.js';
 import { ansichtFamilie, ansichtVermoegen, ansichtAusgangslage, ansichtZiel } from './ui/ansichten.js';
-import { ansichtSzenarien, ansichtVergleich, ergebnisse } from './ui/ergebnisse.js';
+import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer } from './ui/ergebnisse.js';
 import { sheetInhalt } from './ui/sheets.js';
 import { icon } from './ui/icons.js';
-import { esc, euro, parseZahl, parseQuote } from './ui/format.js';
+import { esc, euro, parseZahl, parseQuote, parseDatum } from './ui/format.js';
 import { neueId, tiefeKopie, addJahre } from './engine/util.js';
 
 const ANSICHTEN = [
@@ -29,8 +29,9 @@ function render() {
   const scrollSheet = $('.sheet-inhalt')?.scrollTop;
 
   renderNav(f);
-  const ansicht = ANSICHTEN.find(([k]) => k === state.ansicht) || ANSICHTEN[0];
-  $('#content').innerHTML = ansicht[3](f);
+  const idx = Math.max(0, ANSICHTEN.findIndex(([k]) => k === state.ansicht));
+  const ansicht = ANSICHTEN[idx];
+  $('#content').innerHTML = ansicht[3](f) + schrittNav(idx);
   $('#mobil-titel').textContent = f.titel || 'Fall';
   renderSheet(f);
   if (ansicht[0] === 'familie') requestAnimationFrame(zeichneLinien);
@@ -43,6 +44,15 @@ function render() {
     }
   }
   if (scrollSheet != null && $('.sheet-inhalt')) $('.sheet-inhalt').scrollTop = scrollSheet;
+}
+
+function schrittNav(idx) {
+  const zurueck = ANSICHTEN[idx - 1];
+  const weiter = ANSICHTEN[idx + 1];
+  return `<nav class="schrittnav" aria-label="Schritte">
+    ${zurueck ? `<button type="button" class="btn" data-nav="${zurueck[0]}">${icon('arrow-left', 18)}Zurück: ${zurueck[1]}</button>` : '<span></span>'}
+    ${weiter ? `<button type="button" class="btn primary" data-nav="${weiter[0]}">Weiter: ${weiter[1]}${icon('arrow-right', 18)}</button>` : ''}
+  </nav>`;
 }
 
 function renderNav(f) {
@@ -124,6 +134,7 @@ function wertAusElement(el) {
   const v = el.value;
   if (typ === 'euro' || typ === 'zahl') { const n = parseZahl(v); return n == null ? '' : n; }
   if (typ === 'quote') { const q = parseQuote(v); return q == null ? '' : q; }
+  if (typ === 'datum') return parseDatum(v);
   return v;
 }
 
@@ -284,6 +295,24 @@ const AKTIONEN = {
     state.sheet = { typ: 'schritt', sz: Number(d.sz), index: sz.schritte.length - 1 };
   }),
 
+  'ereignis-umschalten': (d) => { state.offenSz = state.offenSz || {}; state.offenSz[d.id] = !state.offenSz[d.id]; render(); },
+  'sz-reihenfolge': (d) => { state.szReihenfolge = d.id; render(); },
+  'vorschlaege-umschalten': () => { state.vorschlaegeOffen = state.vorschlaegeOffen === false; render(); },
+  'vorschlag-uebernehmen': (d) => {
+    const v = vorschlaegeFuer(fall());
+    const x = v.liste?.find((y) => y.id === d.id);
+    if (!x) return;
+    aendern((f) => {
+      const sz = tiefeKopie(x.szenario);
+      sz.id = neueId('sz');
+      sz.vorschlagId = x.id;
+      sz.name = `Vorschlag: ${x.bausteine.join(', ')}`;
+      sz.schritte.forEach((st) => (st.id = neueId('st')));
+      f.szenarien.push(sz);
+      state.szenarioId = sz.id;
+    });
+    toast('Vorschlag als Szenario übernommen');
+  },
   'detail-waehlen': (d) => { state.detail.szenarioId = d.id; render(); },
   reihenfolge: (d) => { state.detail.reihenfolge = d.id; render(); },
   tab: (d) => { state.detail.tab = d.id; render(); },
@@ -368,6 +397,8 @@ document.addEventListener('click', (e) => {
     return;
   }
   const akt = e.target.closest('[data-act]');
+  const stopp = e.target.closest('[data-stopp]');
+  if (akt && stopp && akt.contains(stopp)) return;
   if (akt && AKTIONEN[akt.dataset.act]) {
     e.preventDefault();
     AKTIONEN[akt.dataset.act](akt.dataset);
@@ -377,11 +408,34 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   const el = e.target.closest('[data-bind]');
   if (!el) return;
-  setzeBindung(el.dataset.bind, wertAusElement(el));
+  const wert = wertAusElement(el);
+  if (el.dataset.typ === 'datum' && wert === null) {
+    el.classList.add('fehler');
+    toast('Datum bitte als TT.MM.JJJJ eingeben, z. B. 22.03.1949');
+    return;
+  }
+  setzeBindung(el.dataset.bind, wert);
+});
+
+// Datumsfelder: Punkte beim Tippen ergänzen
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el.matches?.('input[data-typ="datum"]')) return;
+  el.classList.remove('fehler');
+  if (e.inputType && e.inputType.startsWith('delete')) return;
+  if (/\.\./.test(el.value)) { el.value = el.value.replace(/\.{2,}/g, '.'); return; }
+  const ziffern = el.value.replace(/\D/g, '');
+  if (/^\d+$/.test(el.value) && ziffern.length >= 3 && ziffern.length <= 8) {
+    const teile = [ziffern.slice(0, 2), ziffern.slice(2, 4), ziffern.slice(4, 8)].filter(Boolean);
+    el.value = teile.join('.');
+  } else if (/^\d{2}$/.test(el.value) || /^\d{1,2}\.\d{2}$/.test(el.value)) {
+    el.value += '.';
+  }
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && state.sheet) { state.sheet = null; render(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Enter' && e.target.matches('input.input')) e.target.blur();
 });
 

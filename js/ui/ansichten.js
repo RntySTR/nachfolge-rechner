@@ -3,7 +3,7 @@
 import { esc, euro, quote, datum, zahlText } from './format.js';
 import { icon } from './icons.js';
 import {
-  ARTEN, NUTZUNGEN, avatar, nameVon, rolleText, alterText, personFarbe, seitenkopf, segment, schalter,
+  ARTEN, NUTZUNGEN, assetIcon, avatar, nameVon, rolleText, alterText, personFarbe, seitenkopf, segment, schalter,
   eurofeld, datumfeld, aktionsknopf, quoteEingabe, feld, textfeld
 } from './komponenten.js';
 import { steuerklasse } from '../engine/personen.js';
@@ -128,7 +128,7 @@ export function ansichtVermoegen(f) {
     const summe = eig.reduce((s, [, q]) => s + Number(q), 0);
     const nutzung = a.art === 'immobilie' ? (NUTZUNGEN.find(([k]) => k === a.nutzung) || [, ''])[1] : '';
     return `<button type="button" class="asset" data-act="vermoegen-bearbeiten" data-id="${a.id}">
-      <div class="oben"><span class="symbol">${icon(art[2], 22)}</span><div><div class="bez">${esc(a.bezeichnung || 'Ohne Bezeichnung')}</div><div class="art">${esc(art[1])}${nutzung ? ` · ${esc(nutzung)}` : ''}</div></div></div>
+      <div class="oben"><span class="symbol">${icon(assetIcon(a), 22)}</span><div><div class="bez">${esc(a.bezeichnung || 'Ohne Bezeichnung')}</div><div class="art">${esc(art[1])}${nutzung ? ` · ${esc(nutzung)}` : ''}</div></div></div>
       <div class="wert">${euro(vw(a))}<small>${a.steuerwert != null && a.steuerwert !== '' ? `Steuerwert ${euro(a.steuerwert)}` : 'Steuerwert = Verkehrswert (Annahme)'}${Number(a.verbindlichkeit) ? ` · Verbindlichkeit ${euro(a.verbindlichkeit)}` : ''}</small></div>
       <div class="anteile">${eig.map(([p, q]) => `<span style="width:${(q / (summe || 1)) * 100}%;background:${personFarbe(f, p)}"></span>`).join('')}</div>
       <div class="eigner">${eig.length ? eig.map(([p, q]) => `${esc(nameVon(f, p))} ${quote(q)}`).join(' · ') : '<span class="ziel-nein">Kein Eigentümer erfasst</span>'}${Math.abs(summe - 1) > 0.001 && eig.length ? ' <span class="ziel-nein">(Summe ≠ 1)</span>' : ''}</div>
@@ -208,9 +208,15 @@ export function ansichtZiel(f) {
     inhalt = f.vermoegen.length ? f.vermoegen.map((a) => {
       const soll = z.assets?.[a.id] || {};
       const ids = Object.keys(soll);
+      const art = ARTEN.find(([k]) => k === a.art) || ARTEN[4];
+      const nutzung = a.art === 'immobilie' ? (NUTZUNGEN.find(([k]) => k === a.nutzung) || [, ''])[1] : '';
+      const heute = Object.entries(a.eigentum || {}).filter(([, q]) => q > 0).map(([p, q]) => `${nameVon(f, p)} ${quote(q)}`).join(', ');
       return `<div class="flaeche raster">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;flex-wrap:wrap"><h3>${esc(a.bezeichnung)}</h3><span class="num muted">${euro(vw(a))}</span></div>
-        <div class="chips">${empfaenger.map((p) => `<button type="button" class="chip" data-toggle-anteil="ziel.assets.${a.id}" data-wert="${p.id}" aria-pressed="${ids.includes(p.id)}">${avatar(f, p.id)}${esc(nameVon(f, p.id))}</button>`).join('')}</div>
+        <div class="ziel-kopf"><span class="symbol">${icon(assetIcon(a), 22)}</span><div class="t"><b>${esc(a.bezeichnung || art[1])}</b><span>${esc(art[1])}${nutzung ? ` · ${esc(nutzung)}` : ''}</span></div><span class="wert">${euro(vw(a))}</span></div>
+        <div class="eigner-heute">Heute: ${esc(heute || 'kein Eigentümer erfasst')}</div>
+        <div class="feld"><div class="lbl">Soll am Ende erhalten</div>
+          <div class="chips">${empfaenger.map((p) => `<button type="button" class="chip" data-toggle-anteil="ziel.assets.${a.id}" data-wert="${p.id}" aria-pressed="${ids.includes(p.id)}">${avatar(f, p.id)}${esc(nameVon(f, p.id))}</button>`).join('')}</div>
+        </div>
         ${ids.length > 1 ? `<div class="gruppe">${ids.map((id) => `<div class="anteilzeile">${avatar(f, id)}<span>${esc(nameVon(f, id))}</span>${quoteEingabe(`ziel.assets.${a.id}.${id}`, soll[id])}</div>`).join('')}</div>` : ''}
       </div>`;
     }).join('') : `<div class="leer"><h3>Noch keine Vermögenswerte</h3><p>Erfassen Sie zuerst das Vermögen, dann die gewünschte Verteilung.</p>${aktionsknopf('nav', 'Zum Vermögen', { daten: { ziel: 'vermoegen' } })}</div>`;

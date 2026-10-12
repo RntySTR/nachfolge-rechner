@@ -31,6 +31,11 @@ export const NUTZUNGEN = [
   ['sonstige', 'Sonstige Nutzung']
 ];
 
+export function assetIcon(a) {
+  if (a?.art === 'immobilie') return a.nutzung === 'familienheim' ? 'house' : a.nutzung === 'vermietet_gewerbe' ? 'landmark' : 'building-2';
+  return (ARTEN.find(([k]) => k === a?.art) || ARTEN[4])[2];
+}
+
 export function rolleText(p, fall) {
   if (p.rolle === 'geber') return p.geschlecht === 'w' ? 'Vermögensgeberin' : 'Vermögensgeber';
   return (ROLLEN.find(([k]) => k === p.rolle) || [, 'Person'])[1];
@@ -72,7 +77,14 @@ export function textfeld(label, pfad, wert, { platzhalter = '', hilfe = '' } = {
 
 export function datumfeld(label, pfad, wert, { hilfe = '' } = {}) {
   const id = fid();
-  return feld(label, `<input id="${id}" class="input" type="date" data-bind="${pfad}" data-typ="datum" value="${esc(wert || '')}">`, hilfe, id);
+  return feld(label, `<input id="${id}" class="input datum" type="text" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="TT.MM.JJJJ" data-bind="${pfad}" data-typ="datum" value="${esc(datumText(wert))}">`, hilfe, id);
+}
+
+/** ISO-Datum → TT.MM.JJJJ */
+export function datumText(iso) {
+  if (!iso) return '';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
 }
 
 export function eurofeld(label, pfad, wert, { hilfe = '', platzhalter = '' } = {}) {

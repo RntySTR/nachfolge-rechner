@@ -125,6 +125,10 @@ a { color: var(--brand); }
 }
 .impressum b { font-weight: 500; color: var(--text); }
 
+/* ------------------------------------------------------------------ Schrittnavigation */
+
+.schrittnav { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--line); }
+
 /* ------------------------------------------------------------------ Seitenkopf */
 
 .kopf { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 28px; flex-wrap: wrap; }
@@ -189,6 +193,8 @@ a { color: var(--brand); }
   font: 400 15px/1.3 var(--font-text); color: var(--ink);
 }
 .input:focus { outline: 2px solid var(--brand); outline-offset: -1px; border-color: var(--brand); }
+.input.fehler { border-color: var(--risk); outline-color: var(--risk); background: var(--risk-tint); }
+.input.datum { font-family: var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .input.zahl { font-family: var(--font-display); font-variant-numeric: tabular-nums; text-align: right; }
 .input.kurz { max-width: 120px; }
 .input-wrap { position: relative; }
@@ -296,6 +302,13 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .asset .eigner { font-size: 13px; color: var(--text); }
 .asset.neu { place-items: center; align-content: center; min-height: 220px; border: 1px dashed var(--border); background: transparent; color: var(--muted); font: 500 14px/1.2 var(--font-display); }
 .asset.neu:hover { border-color: var(--brand); color: var(--brand); }
+.ziel-kopf { display: flex; align-items: center; gap: 14px; }
+.ziel-kopf .symbol { width: 44px; height: 44px; display: grid; place-items: center; background: var(--surface); color: var(--brand); flex: none; }
+.ziel-kopf .t { flex: 1; min-width: 0; }
+.ziel-kopf .t b { display: block; font: 500 17px/1.25 var(--font-display); color: var(--ink); }
+.ziel-kopf .t span { font-size: 13px; color: var(--muted); }
+.ziel-kopf .wert { font: 500 18px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.eigner-heute { font-size: 13px; color: var(--muted); }
 
 /* ------------------------------------------------------------------ Tabellen */
 
@@ -312,8 +325,8 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* ------------------------------------------------------------------ Szenarien */
 
-.szenario-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
-.szenarioliste { display: grid; gap: 8px; position: sticky; top: 24px; }
+.szenario-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.szenarioliste { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 .sz-karte { display: grid; gap: 6px; padding: 16px 18px; background: var(--surface-warm); border: 1px solid transparent; cursor: pointer; text-align: left; }
 .sz-karte:hover { border-color: var(--border); }
 .sz-karte[aria-current="true"] { background: var(--surface); border-color: var(--brand); }
@@ -333,6 +346,32 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .ereignis .tt { font: 500 16px/1.3 var(--font-display); color: var(--ink); margin-top: 6px; }
 .ereignis .tx { margin-top: 4px; font-size: 13px; color: var(--muted); }
 .schritt-neu { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
+/* ------------------------------------------------------------------ Vorschläge */
+
+.vorschlaege { margin-bottom: 8px; }
+.vs-kopf { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.vs-kopf p { margin-top: 6px; max-width: 720px; }
+.vs-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.vs-karte { display: grid; gap: 14px; align-content: start; padding: 22px; background: var(--surface-warm); border-top: 3px solid var(--border); }
+.vs-karte.erste { border-top-color: var(--brand); background: var(--brand-tint); }
+.vs-nr { display: block; font: 500 13px/1 var(--font-display); color: var(--brand); }
+.vs-fig { display: block; margin-top: 10px; font-size: 34px; line-height: 1; color: var(--ink); letter-spacing: -0.02em; }
+.vs-lbl { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.vs-texte { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; color: var(--text); }
+.vs-fuss { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--line); }
+.vs-fuss b { font-weight: 500; color: var(--ink); }
+
+/* Ablauf mit Steuer je Ereignis */
+.ereignis.ablauf { display: block; }
+.ereignis.ablauf.offen { background: var(--surface); border-color: var(--brand); }
+.ab-kopf { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+.ab-ergebnis { display: grid; justify-items: end; gap: 4px; text-align: right; }
+.ab-steuer { font: 500 18px/1.1 var(--font-display); color: var(--ink); }
+.ab-unter { font-size: 12px; color: var(--muted); max-width: 260px; }
+.ab-knoepfe { display: flex; align-items: center; gap: 4px; color: var(--muted); }
+.ab-detail { margin-top: 14px; cursor: default; }
+.ab-detail .tabelle td .av { width: 26px; height: 26px; font-size: 10px; }
 
 /* ------------------------------------------------------------------ Vergleich */
 
@@ -373,7 +412,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .kachel { background: var(--surface-warm); padding: 18px 20px; }
 .kachel .lbl { font-size: 12px; color: var(--muted); }
 .kachel .fig { display: block; margin-top: 8px; font-size: 26px; line-height: 1.1; color: var(--ink); }
-.kacheln.kompakt { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kacheln.kompakt { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kacheln.kompakt .kachel .fig { font-size: 21px; }
 .karte-knopf { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; width: 100%; padding: 18px 20px; background: var(--surface-warm); border: 1px solid transparent; text-align: left; cursor: pointer; color: var(--muted); }
 .karte-knopf:hover { border-color: var(--border); }
@@ -444,8 +483,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 @media (max-width: 1024px) {
   :root { --nav-w: 220px; --gutter: 24px; }
-  .szenario-layout { grid-template-columns: 1fr; }
-  .szenarioliste { position: static; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .kacheln.kompakt { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
@@ -466,6 +504,9 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   .ergebnis-hero .seite + .seite { border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.12); }
   .raster.zwei, .raster.drei { grid-template-columns: 1fr; }
   .vg-zeile { grid-template-columns: 1fr auto; }
+  .vs-raster { grid-template-columns: 1fr; }
+  .ab-kopf { grid-template-columns: 1fr; }
+  .ab-ergebnis { justify-items: start; text-align: left; }
   .vg-zeile .stapel { grid-column: 1 / -1; grid-row: 2; }
   .personenliste .zeile { grid-template-columns: 40px 1fr 32px; }
   .personenliste .zeile .opt { display: none; }
