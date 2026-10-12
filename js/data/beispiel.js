@@ -29,16 +29,16 @@ export function beispielfall() {
     selbstnutzung: { p_a: true, p_b: true },
     vorschenkungen: [],
     verfuegungen: {
-      a: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1, k_2: 1 }, vermaechtnisse: [] },
-      b: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1, k_2: 1 }, vermaechtnisse: [] }
+      a: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1 / 2, k_2: 1 / 2 }, vermaechtnisse: [] },
+      b: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1 / 2, k_2: 1 / 2 }, vermaechtnisse: [] }
     },
     ziel: {
       modus: 'asset',
       assets: {
-        v_haus: { k_1: 1, k_2: 1, k_3: 1 },
-        v_mfh: { k_1: 1, k_2: 1, k_3: 1 },
-        v_depot: { k_1: 1, k_2: 1, k_3: 1 },
-        v_geld: { k_1: 1, k_2: 1, k_3: 1 }
+        v_haus: { k_1: 1 / 3, k_2: 1 / 3, k_3: 1 / 3 },
+        v_mfh: { k_1: 1 / 3, k_2: 1 / 3, k_3: 1 / 3 },
+        v_depot: { k_1: 1 / 3, k_2: 1 / 3, k_3: 1 / 3 },
+        v_geld: { k_1: 1 / 3, k_2: 1 / 3, k_3: 1 / 3 }
       },
       quoten: {},
       nebenbedingungen: { laengerlebenderAbgesichert: true, enkelEinbeziehen: false, keineSchaukel: false, ehegatteNichtsEndgueltig: false }
@@ -53,15 +53,15 @@ export function beispielfall() {
           {
             id: 'st_1', typ: 'schenkung', datum: '2026-12-01', titel: 'Überlassung Mehrfamilienhaus', von: 'p_a',
             gegenstaende: [{ assetId: 'v_mfh', quote: 1 }],
-            empfaenger: [{ personId: 'k_1', anteil: 1 }, { personId: 'k_2', anteil: 1 }, { personId: 'k_3', anteil: 1 }],
+            empfaenger: { k_1: 1 / 3, k_2: 1 / 3, k_3: 1 / 3 },
             nutzung: { typ: 'niessbrauch', berechtigte: ['p_a', 'p_b'], modus: 'sukzessiv', quote: 1 },
             gegenleistungen: [], rueckforderungsrecht: true, pflichtteilsverzicht: false
           },
           {
             id: 'st_2', typ: 'verfuegung', datum: '2027-01-20', titel: 'Erbvertrag mit Freibetragsvermächtnissen', form: 'erbvertrag', fuer: ['a', 'b'],
             regelungen: {
-              a: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1, k_2: 1, k_3: 1 }, vermaechtnisse: [{ id: 'vm1', typ: 'freibetrag', an: ['k_1', 'k_2', 'k_3'], betragMax: 60000, faelligkeit: 'erbfall' }] },
-              b: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1, k_2: 1, k_3: 1 }, vermaechtnisse: [{ id: 'vm2', typ: 'freibetrag', an: ['k_1', 'k_2', 'k_3'], betragMax: 100000, faelligkeit: 'erbfall' }] }
+              a: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1 / 3, k_2: 1 / 3, k_3: 1 / 3 }, vermaechtnisse: [{ id: 'vm1', typ: 'freibetrag', an: ['k_1', 'k_2', 'k_3'], betragMax: 60000, faelligkeit: 'erbfall' }] },
+              b: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { k_1: 1 / 3, k_2: 1 / 3, k_3: 1 / 3 }, vermaechtnisse: [{ id: 'vm2', typ: 'freibetrag', an: ['k_1', 'k_2', 'k_3'], betragMax: 100000, faelligkeit: 'erbfall' }] }
             }
           }
         ],

@@ -108,3 +108,36 @@ test('Sterbereihenfolge: Wahrscheinlichkeiten ergeben 1', () => {
   assert.ok(Math.abs(p + q - 1) < 0.01, `${p} + ${q}`);
   assert.ok(p > 0.5); // älterer Mann stirbt eher zuerst
 });
+
+test('Teilentgeltliche Zuwendung mit Nießbrauch und Weiterschenkung', () => {
+  const fall = {
+    stichtag: '2026-10-12', geber: { a: 'M', b: 'F' }, gueterstand: 'zugewinn', anfangsvermoegen: {},
+    personen: [
+      { id: 'M', vorname: 'M', geburt: '1951-02-10', geschlecht: 'm', rolle: 'geber' },
+      { id: 'F', vorname: 'F', geburt: '1952-04-03', geschlecht: 'w', rolle: 'geber' },
+      { id: 'K1', vorname: 'K1', geburt: '1980-01-01', geschlecht: 'w', rolle: 'kind', bezug: { eltern: ['a', 'b'] } },
+      { id: 'K2', vorname: 'K2', geburt: '1982-01-01', geschlecht: 'm', rolle: 'kind', bezug: { eltern: ['a', 'b'] } }
+    ],
+    vermoegen: [
+      { id: 'X', bezeichnung: 'Geschäftshaus', art: 'immobilie', nutzung: 'vermietet_gewerbe', verkehrswert: 4000000, jahresertrag: 120000, eigentum: { F: 1 } },
+      { id: 'Y', bezeichnung: 'Wohnung', art: 'immobilie', nutzung: 'vermietet_gewerbe', verkehrswert: 500000, eigentum: { M: 0.5, F: 0.5 } }
+    ],
+    verfuegungen: {}, ziel: {}
+  };
+  const sz = { id: 's', schritte: [
+    { id: '1', typ: 'schenkung', datum: '2026-11-02', von: 'F', gegenstaende: [{ assetId: 'X', quote: 0.5 }], empfaenger: { M: 1 },
+      nutzung: { typ: 'niessbrauch', berechtigte: ['F'], modus: 'einzel' }, gegenleistungen: [{ typ: 'sache', assetId: 'Y', quote: 0.5, vonId: 'M' }] },
+    { id: '2', typ: 'schenkung', datum: '2026-11-02', von: 'M', gegenstaende: [{ assetId: 'X', quote: 0.5 }], empfaenger: { K1: 0.5, K2: 0.5 },
+      nutzung: { typ: 'niessbrauch', berechtigte: ['F', 'M'], modus: 'sukzessiv' } }
+  ] };
+  const r = simuliere(fall, sz, { erstversterbender: 'F' });
+  const [e1, e2, e3] = r.erwerbe;
+  // Nießbrauch 60.000 × 9,754 = 585.240; Bereicherung 2.000.000 − 585.240 − 250.000 = 1.164.760
+  assert.equal(e1.bereicherung, 1164760);
+  assert.equal(e1.steuer, 122350);     // Härteausgleich an der Grenze 600.000 €
+  assert.equal(e2.bereicherung, 707380);
+  assert.equal(e2.steuer, 36650);      // Härteausgleich an der Grenze 300.000 €
+  assert.equal(e3.steuer, 36650);
+  assert.ok(r.hinweise.some((h) => h.titel === 'Kettenschenkungsrisiko'));
+  assert.ok(r.hinweise.some((h) => h.titel === 'Teilentgeltliche Übertragung'));
+});

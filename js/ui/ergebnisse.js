@@ -171,13 +171,20 @@ function schrittKarte(f, s, i, j) {
 }
 
 function kurzergebnis(f, r) {
-  const zielOk = r.ziel.every((z) => z.erfuellt);
+  const zielOk = zielStatus(r.ziel);
   return `<div class="kacheln kompakt" style="margin:0">
     <div class="kachel"><span class="lbl">Belastung (gewichtet)</span><span class="fig num">${euro(r.erwartet)}</span></div>
     ${r.laeufe.map((l) => `<div class="kachel"><span class="lbl">${esc(laufLabel(f, l))}</span><span class="fig num">${euro(l.summen.belastung)}</span></div>`).join('')}
-    <div class="kachel"><span class="lbl">Ziel</span><span class="fig ${zielOk ? 'ziel-ok' : 'ziel-nein'}" style="font-size:20px">${zielOk ? 'erreicht' : 'nicht erreicht'}</span></div>
+    <div class="kachel"><span class="lbl">Ziel</span><span class="fig ${zielKlasse(zielOk)}" style="font-size:20px">${zielText(zielOk)}</span></div>
   </div>`;
 }
+
+function zielStatus(liste) {
+  if (liste.every((z) => z.erfuellt == null)) return null;
+  return liste.every((z) => z.erfuellt !== false);
+}
+const zielText = (s) => (s == null ? 'nicht erfasst' : s ? 'erreicht' : 'nicht erreicht');
+const zielKlasse = (s) => (s == null ? 'muted' : s ? 'ziel-ok' : 'ziel-nein');
 
 function fehltBox(fehlt) {
   return `<div class="hinweis warnung" style="margin-bottom:20px">${icon('circle-alert', 20)}<div><div class="tt">Für die Berechnung fehlen Angaben</div><div class="tx">${fehlt.map(esc).join(', ')}.</div></div></div>`;
@@ -232,10 +239,10 @@ export function ansichtVergleich(f) {
 
   const zeilen = res.szenarien.map((r) => {
     if (r.fehler) return `<div class="vg-zeile"><div class="nm">${esc(r.sz.name)}<small class="ziel-nein">${esc(r.fehler)}</small></div><div></div><div></div></div>`;
-    const zielOk = r.ziel.every((z) => z.erfuellt);
+    const zielOk = zielStatus(r.ziel);
     const w = (x) => `${(Math.max(0, x) / max) * 100}%`;
     return `<button type="button" class="vg-zeile${r === beste && basis && beste.erwartet < basis.erwartet ? ' beste' : ''}" data-act="detail-waehlen" data-id="${r.sz.id}" aria-current="${r.sz.id === detailId}" style="text-align:left;border:0;font:inherit">
-      <div class="nm">${esc(r.sz.name)}<small>${zielOk ? '<span class="ziel-ok">Ziel erreicht</span>' : '<span class="ziel-nein">Ziel nicht erreicht</span>'}${r.risiken ? ` · ${r.risiken} Risiko${r.risiken > 1 ? 'hinweise' : 'hinweis'}` : ''}</small></div>
+      <div class="nm">${esc(r.sz.name)}<small><span class="${zielKlasse(zielOk)}">${zielOk == null ? 'Kein Ziel erfasst' : `Ziel ${zielText(zielOk)}`}</span>${r.risiken ? ` · ${r.risiken} Risiko${r.risiken > 1 ? 'hinweise' : 'hinweis'}` : ''}</small></div>
       <div class="stapel" title="Steuer zu Lebzeiten ${euro(r.steuerLebzeiten)}, Steuer in den Erbfällen ${euro(r.steuerErbfaelle)}, Kosten ${euro(r.kosten)}"><span class="l" style="width:${w(r.steuerLebzeiten)}"></span><span class="e" style="width:${w(r.steuerErbfaelle)}"></span><span class="k" style="width:${w(r.kosten)}"></span></div>
       <div class="betrag num">${euro(r.erwartet)}<small>${r.laeufe.map((l) => `${esc(nameVon(f, l.erstversterbender))} zuerst ${euro(l.summen.belastung)}`).join('<br>')}</small></div>
     </button>`;
@@ -297,7 +304,7 @@ function detail(f, res, id) {
       <div class="kachel"><span class="lbl">Steuer zu Lebzeiten</span><span class="fig num">${euro(lauf.summen.steuerLebzeiten)}</span></div>
       <div class="kachel"><span class="lbl">Steuer in den Erbfällen</span><span class="fig num">${euro(lauf.summen.steuerErbfaelle)}</span></div>
       <div class="kachel"><span class="lbl">Notar- und Grundbuchkosten</span><span class="fig num">${euro(lauf.summen.kosten)}</span></div>
-      <div class="kachel"><span class="lbl">Ziel</span><span class="fig ${zielOk ? 'ziel-ok' : 'ziel-nein'}" style="font-size:22px">${zielOk ? 'erreicht' : 'nicht erreicht'}</span></div>
+      <div class="kachel"><span class="lbl">Ziel</span><span class="fig ${zielKlasse(zielOk)}" style="font-size:22px">${zielText(zielOk)}</span></div>
     </div>
     <div class="seg" role="tablist" style="margin-bottom:18px">${tabs.map(([k, t]) => `<button type="button" role="tab" data-act="tab" data-id="${k}" aria-pressed="${k === tab}">${esc(t)}</button>`).join('')}</div>
     ${inhalt}
@@ -320,8 +327,8 @@ function erwerbDetail(f, e) {
   if (e.steuerUebernahmeBetrag) teile.push(zeile('Vom Schenker übernommene Steuer', e.steuerUebernahmeBetrag, false, '§ 10 Abs. 2 ErbStG'));
   if (e.vorerwerbe?.length) teile.push(zeile(`Vorerwerbe innerhalb von 10 Jahren (${e.vorerwerbe.map((v) => datum(v.datum)).join(', ')})`, e.summeVorerwerbe, false, '§ 14 ErbStG'));
   if (!e.steuerfrei) {
-    teile.push(zeile(`Persönlicher Freibetrag (${e.beziehung}, StKl ${e.stkl})`, e.freibetrag, true, '§ 16 ErbStG'));
-    if (e.versorgungsfreibetrag) teile.push(zeile('Versorgungsfreibetrag', e.versorgungsfreibetrag, true, '§ 17 ErbStG'));
+    teile.push(zeile(`Persönlicher Freibetrag ${euro(e.freibetrag)} (${e.beziehung}, StKl ${e.stkl}), hier genutzt`, e.freibetragGenutzt, true, '§ 16 ErbStG'));
+    if (e.versorgungsfreibetrag) teile.push(zeile(`Versorgungsfreibetrag ${euro(e.versorgungsfreibetrag)}, hier genutzt`, e.versorgungsfreibetragGenutzt || 0, true, '§ 17 ErbStG'));
     teile.push(zeile('Steuerpflichtiger Erwerb (gerundet)', e.stpfl));
     if (e.abzugVorerwerbe) teile.push(zeile('Abzug Steuer auf Vorerwerbe', e.abzugVorerwerbe, true, '§ 14 Abs. 1 S. 2 ErbStG'));
     if (e.par27Ermaessigung) teile.push(zeile('Ermäßigung mehrfacher Erwerb', e.par27Ermaessigung, true, '§ 27 ErbStG'));

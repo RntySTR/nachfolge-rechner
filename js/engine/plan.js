@@ -1235,7 +1235,7 @@ export function zielabgleich(fall, ergebnis) {
       const ist = gesamt ? (werte[p] || 0) / gesamt : 0;
       res.push({ personId: p, soll, ist, ok: Math.abs(ist - soll) < 0.02 });
     }
-    return { modus: 'quote', zeilen: res, erfuellt: res.every((r) => r.ok) };
+    return { modus: 'quote', zeilen: res, erfuellt: res.length ? res.every((r) => r.ok) : null };
   }
   for (const a of fall.vermoegen) {
     const soll = ziel.assets?.[a.id];
@@ -1245,7 +1245,7 @@ export function zielabgleich(fall, ergebnis) {
     const ok = Object.keys({ ...sollN, ...ist }).every((p) => Math.abs((sollN[p] || 0) - (ist[p] || 0)) < 0.01);
     res.push({ assetId: a.id, soll: sollN, ist, ok });
   }
-  return { modus: 'asset', zeilen: res, erfuellt: res.every((r) => r.ok) };
+  return { modus: 'asset', zeilen: res, erfuellt: res.length ? res.every((r) => r.ok) : null };
 }
 
 // ---------------------------------------------------------------- Formatierung (auch in der UI genutzt)
