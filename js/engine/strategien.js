@@ -90,7 +90,7 @@ function bausteinTestament(fall) {
       vms.push({ id: neueId('vm'), typ: 'freibetrag', an: kinderImZiel, faelligkeit: 'erbfall', nurErsterErbfall: true, maxNachlassAnteil: nb.laengerlebenderAbgesichert === false ? undefined : 0.5 });
     }
     if (nb.enkelEinbeziehen && enkel.length) {
-      vms.push({ id: neueId('vm'), typ: 'freibetrag', an: enkel, faelligkeit: 'erbfall', nurErsterErbfall: false, maxNachlassAnteil: 0.3 });
+      vms.push({ id: neueId('vm'), typ: 'freibetrag', an: enkel, faelligkeit: 'erbfall', nurErsterErbfall: false, maxNachlassAnteil: nb.laengerlebenderAbgesichert === false ? undefined : 0.5 });
     }
     if (!einheitlich) {
       for (const a of fall.vermoegen) {
@@ -105,7 +105,7 @@ function bausteinTestament(fall) {
   const texte = [];
   if (ehepaar) {
     texte.push(`Erbvertrag: Die Ehegatten setzen sich gegenseitig ein; Schlusserben sind ${namen(fall, Object.keys(ziel))}.`);
-    if (kinderImZiel.length) texte.push(`Beim ersten Erbfall erhalten ${namen(fall, kinderImZiel)} Vermächtnisse in Höhe ihres Freibetrags gegenüber dem Erstversterbenden${nb.laengerlebenderAbgesichert === false ? '' : ', zusammen höchstens die Hälfte des Nachlasses'}. Der Längerlebende bestimmt Zeitpunkt und Gegenstand.`);
+    if (kinderImZiel.length) texte.push(`Beim ersten Erbfall erhalten ${namen(fall, kinderImZiel)} Vermächtnisse bis zur Höhe ihres Freibetrags gegenüber dem Erstversterbenden${nb.laengerlebenderAbgesichert === false ? '' : `; gerechnet sind alle Vermächtnisse zusammen mit höchstens der Hälfte des Nachlasses (Verkehrswert)`}. Der Längerlebende bestimmt Gegenstand, Anteile und Zeitpunkt nach billigem Ermessen, spätestens 3 Jahre nach dem ersten Erbfall; ohne diese Frist wäre das Vermächtnis erst bei seinem Tod fällig (§ 2181 BGB, § 6 Abs. 4 ErbStG).`);
   } else {
     texte.push(`Notarielles Testament zugunsten von ${namen(fall, Object.keys(ziel))}.`);
   }
@@ -119,12 +119,17 @@ function bausteinTestament(fall) {
   };
 }
 
+/** Vermögenswerte, die zu Lebzeiten übertragen werden dürfen (Auswahl auf der Szenarien-Seite). */
+export function uebertragbar(fall, a) {
+  return !(fall.ziel?.nebenbedingungen?.nichtUebertragen || []).includes(a.id);
+}
+
 function schenkungsKandidaten(fall) {
   const res = [];
   for (const g of geberListe(fall)) {
     for (const a of fall.vermoegen) {
       const q = Number(a.eigentum?.[g] || 0);
-      if (q <= 0) continue;
+      if (q <= 0 || !uebertragbar(fall, a)) continue;
       if (!(a.art === 'immobilie' && a.nutzung !== 'familienheim') && a.art !== 'depot') continue;
       if (vw(a) * q < 100000) continue;
       const ziel = zielVerteilung(fall, a.id);
@@ -139,7 +144,8 @@ function schenkungsKandidaten(fall) {
 function schenkungsSchritt(fall, { g, a, quote, empf, datum, titel }) {
   const nb = fall.ziel?.nebenbedingungen || {};
   const ehe = ehegatte(fall, g);
-  const nachfolger = ehe && nb.laengerlebenderAbgesichert !== false && !personMap(fall).get(ehe)?.vorverstorben ? [ehe] : [];
+  // Folgenießbrauch des Ehegatten (Zuwendungsnießbrauch) nur bei Grundbesitz; bei Depots ertragsteuerlich ungünstig
+  const nachfolger = ehe && a.art === 'immobilie' && nb.laengerlebenderAbgesichert !== false && !personMap(fall).get(ehe)?.vorverstorben ? [ehe] : [];
   return {
     id: neueId('st'), typ: 'schenkung', datum, titel, von: g,
     gegenstaende: [{ assetId: a.id, quote }],
@@ -153,7 +159,7 @@ function bausteinSchenkung(fall, kandidaten) {
   if (!kandidaten.length) return null;
   const nb = fall.ziel?.nebenbedingungen || {};
   const texte = kandidaten.map(({ g, a, q, empf }) =>
-    `${name(fall, g)} überträgt ${q < 1 ? `${pron(fall, g).seinen} Anteil (${fmtQuote(q)}) am` : 'das'} „${a.bezeichnung || 'Vermögen'}“ jetzt an ${namen(fall, Object.keys(empf))} und behält sich den Nießbrauch vor${ehegatte(fall, g) && nb.laengerlebenderAbgesichert !== false ? `; nach ${pron(fall, g).seinem} Tod steht er ${name(fall, ehegatte(fall, g))} zu` : ''}.`);
+    `${name(fall, g)} überträgt ${q < 1 ? `${pron(fall, g).seinen} Anteil (${fmtQuote(q)}) am` : 'das'} „${a.bezeichnung || 'Vermögen'}“ jetzt an ${namen(fall, Object.keys(empf))} und behält sich den Nießbrauch vor${ehegatte(fall, g) && a.art === 'immobilie' && nb.laengerlebenderAbgesichert !== false ? `; nach ${pron(fall, g).seinem} Tod steht er ${name(fall, ehegatte(fall, g))} zu (Zuwendungsnießbrauch, ertragsteuerlich gesondert zu prüfen)` : ''}.`);
   texte.push('Der Kapitalwert des Nießbrauchs mindert die Schenkung. Nach 10 Jahren stehen die Freibeträge erneut zur Verfügung; ein Rückforderungsrecht sichert die Schenker ab.');
   return {
     key: 'S',
@@ -207,15 +213,15 @@ function bausteinFamilienheim(fall) {
   if (!b) return null;
   const reich = nettoVon(fall, a) >= nettoVon(fall, b) ? a : b;
   const arm = reich === a ? b : a;
-  const heime = fall.vermoegen.filter((v) => v.art === 'immobilie' && v.nutzung === 'familienheim' && Number(v.eigentum?.[reich] || 0) > 0);
+  const heime = fall.vermoegen.filter((v) => v.art === 'immobilie' && v.nutzung === 'familienheim' && Number(v.eigentum?.[reich] || 0) > 0 && uebertragbar(fall, v));
   if (!heime.length) return null;
   return {
     key: 'F',
     titel: 'Familienheim an den Ehegatten',
-    texte: [`${name(fall, reich)} überträgt ${pron(fall, reich).seinen} Anteil am Familienheim schenkungsteuerfrei an ${name(fall, arm)} (§ 13 Abs. 1 Nr. 4a ErbStG). Das gleicht die Vermögen der Ehegatten an, sodass beide ihre Freibeträge gegenüber den Kindern nutzen.`],
+    texte: [`${name(fall, reich)} überträgt ${pron(fall, reich).seinen} Anteil am Familienheim schenkungsteuerfrei an ${name(fall, arm)} (§ 13 Abs. 1 Nr. 4a ErbStG). Das gleicht die Vermögen der Ehegatten an, sodass beide ihre Freibeträge gegenüber den Kindern nutzen. Mit Rückforderungsrecht für Vorversterben und Scheidung; Anrechnung auf den Zugewinnausgleich regeln (§ 1380 BGB). Pflichtteilsergänzung: die Frist beginnt nicht vor Auflösung der Ehe (§ 2325 Abs. 3 S. 3 BGB).`],
     schritte: (d) => heime.map((h) => ({
       id: neueId('st'), typ: 'schenkung', datum: d.familienheim, titel: 'Familienheim an Ehegatten', von: reich,
-      gegenstaende: [{ assetId: h.id, quote: Number(h.eigentum[reich]) }], empfaenger: { [arm]: 1 }, nutzung: { typ: 'keine' }, gegenleistungen: []
+      gegenstaende: [{ assetId: h.id, quote: Number(h.eigentum[reich]) }], empfaenger: { [arm]: 1 }, nutzung: { typ: 'keine' }, gegenleistungen: [], rueckforderungsrecht: true
     }))
   };
 }
@@ -234,8 +240,8 @@ function bausteinSchaukel(fall) {
   return {
     key: 'G',
     titel: 'Güterstandsschaukel',
-    texte: [`Die Ehegatten vereinbaren Gütertrennung und kehren danach zur Zugewinngemeinschaft zurück. ${name(fall, schuldner)} zahlt ${name(fall, glaeubiger)} rund ${fmtEuro(ausgleich)} Zugewinnausgleich steuerfrei (§ 5 Abs. 2 ErbStG).${anf.a === '' || anf.a == null ? ' Das Anfangsvermögen ist nicht erfasst; der Betrag ist deshalb vorläufig.' : ''}`],
-    schritte: (d) => [{ id: neueId('st'), typ: 'gueterstand', datum: d.schaukel, titel: 'Güterstandsschaukel', rueckkehr: true, urkunden: 'zwei', ausgleich: 'berechnet', erfuellung: [] }]
+    texte: [`Die Ehegatten vereinbaren Gütertrennung und kehren danach zur Zugewinngemeinschaft zurück. ${name(fall, schuldner)} schuldet ${name(fall, glaeubiger)} rund ${fmtEuro(ausgleich)} Zugewinnausgleich, schenkungsteuerfrei (§ 5 Abs. 2 ErbStG). Erfüllung durch Zahlung, Stundung oder Übertragung an Erfüllungs statt; die Übertragung von Immobilien oder Wertpapieren ist einkommensteuerlich eine Veräußerung (§ 23 EStG). Alles in einer Urkunde (BFH II R 29/02).${anf.a === '' || anf.a == null ? ' Das Anfangsvermögen ist nicht erfasst und mit 0 € angesetzt; der Betrag ist deshalb vorläufig und eher zu hoch.' : ''}`],
+    schritte: (d) => [{ id: neueId('st'), typ: 'gueterstand', datum: d.schaukel, titel: 'Güterstandsschaukel', rueckkehr: true, urkunden: 'eine', ausgleich: 'berechnet', erfuellung: [] }]
   };
 }
 
@@ -247,7 +253,7 @@ function bausteinPflichtteil(fall) {
   return {
     key: 'P',
     titel: 'Pflichtteil nach dem ersten Erbfall',
-    texte: [`Nach dem ersten Erbfall machen ${namen(fall, kinder)} ihren Pflichtteil geltend und nutzen so ihren Freibetrag gegenüber dem Erstversterbenden. Eine Pflichtteilsstrafklausel muss dafür ausgeschlossen oder einvernehmlich nicht angewendet werden.`],
+    texte: [`Nach dem ersten Erbfall machen ${namen(fall, kinder)} ihren Pflichtteil geltend und nutzen so ihren Freibetrag gegenüber dem Erstversterbenden. Voraussetzung: Die Pflichtteilsstrafklausel greift nur bei Geltendmachung gegen den Willen des Längerlebenden. Geltendmachung innerhalb der Verjährung (3 Jahre); die Erfüllung kann gestundet werden, aber nicht bis zum Tod des Längerlebenden.`],
     erbfallOptionen: { pflichtteil: kinder },
     schritte: () => []
   };
@@ -260,7 +266,7 @@ function bausteinAusschlagung(fall) {
   return {
     key: 'A',
     titel: 'Ausschlagung des Längerlebenden',
-    texte: ['Der Längerlebende schlägt die Erbschaft aus und erhält den tatsächlichen Zugewinnausgleich steuerfrei sowie den kleinen Pflichtteil; der Nachlass geht unmittelbar an die Kinder.'],
+    texte: ['Der Längerlebende schlägt binnen 6 Wochen aus (§ 1944 BGB) und erhält den tatsächlichen Zugewinnausgleich steuerfrei sowie den kleinen Pflichtteil (§ 1371 Abs. 3 BGB); der Nachlass geht unmittelbar an die Kinder. Annahme: Die Schlusserben sind Ersatzerben; die Ersatzerbenregelung ist zu prüfen.'],
     erbfallOptionen: { ausschlagungEhegatte: true },
     schritte: () => []
   };
@@ -273,7 +279,7 @@ function bausteinEnkel(fall) {
   const schritte = [];
   const texte = [];
   for (const g of geberListe(fall)) {
-    const liquide = fall.vermoegen.filter((a) => (a.art === 'geld' || a.art === 'depot') && Number(a.eigentum?.[g] || 0) > 0);
+    const liquide = fall.vermoegen.filter((a) => (a.art === 'geld' || a.art === 'depot') && Number(a.eigentum?.[g] || 0) > 0 && uebertragbar(fall, a));
     const summeLiq = summe(liquide, (a) => vw(a) * Number(a.eigentum[g]));
     if (summeLiq < 50000) continue;
     const jeEnkel = Math.min(R.freibetrag.enkel, (summeLiq * 0.5) / enkel.length);

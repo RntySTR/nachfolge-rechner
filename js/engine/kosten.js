@@ -48,7 +48,15 @@ const NOTAR_MAX_WERT = 60000000; // § 35 Abs. 2 GNotKG
  * notar: [{ kv, text, wert, satz, min, max, betrag? }]
  * gericht: [{ kv, text, wert, satz, betrag? }]
  */
-export function urkunde({ titel, notar = [], gericht = [], grundbuchabrufe = 0, sonstige = [] }) {
+/** Herkunft der Kosten für die Aufschlüsselung der Belastung. */
+export const KOSTENARTEN = [
+  ['notar', 'Notar'],
+  ['grundbuch', 'Grundbuchamt'],
+  ['erbschein', 'Erbschein'],
+  ['nachlass', 'Verwahrung, Register, Eröffnung']
+];
+
+export function urkunde({ titel, notar = [], gericht = [], grundbuchabrufe = 0, sonstige = [], art = null }) {
   const notarPos = notar.map((p) => {
     const wert = Math.min(p.wert ?? 0, NOTAR_MAX_WERT);
     const betrag = p.betrag != null ? p.betrag : wertgebuehr(wert, p.satz, { min: p.min, max: p.max });
@@ -66,8 +74,14 @@ export function urkunde({ titel, notar = [], gericht = [], grundbuchabrufe = 0, 
   const ust = cent(notarNetto * R.gnotkg.ust);
   const gerichtSumme = cent(summe(gerichtPos, (p) => p.betrag));
   const sonstSumme = cent(summe(sonstige, (s) => s.betrag));
+  const summeAlle = cent(notarNetto + ust + gerichtSumme + sonstSumme);
+  const grundbuch = cent(summe(gerichtPos.filter((p) => String(p.kv || '').startsWith('14')), (p) => p.betrag));
+  const anteile = art === 'erbschein'
+    ? { erbschein: summeAlle }
+    : { notar: cent(notarNetto + ust), grundbuch, nachlass: cent(gerichtSumme - grundbuch + sonstSumme) };
   return {
     titel,
+    anteile,
     notar: notarPos,
     auslagen,
     gericht: gerichtPos,

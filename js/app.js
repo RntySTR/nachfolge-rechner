@@ -21,11 +21,49 @@ const $ = (sel, root = document) => root.querySelector(sel);
 
 // ------------------------------------------------------------------ Rendering
 
+// Fokus über das Neuzeichnen retten (Tab-Reihenfolge, Eingaben)
+const FOKUS_ATTR = ['bind', 'set', 'wert', 'act', 'id', 'index', 'pfad', 'toggleListe', 'toggleAnteil', 'nav', 'sz', 'slot', 'typ'];
+function fokusMerken() {
+  const el = document.activeElement;
+  if (!el || el === document.body) return null;
+  const teile = FOKUS_ATTR.filter((k) => el.dataset?.[k] != null)
+    .map((k) => `[data-${k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}="${CSS.escape(el.dataset[k])}"]`);
+  if (!teile.length) return null;
+  const sel = el.tagName.toLowerCase() + teile.join('');
+  const bereich = el.closest('.sheet') ? '.sheet' : el.closest('#content') ? '#content' : '.nav';
+  const n = [...document.querySelectorAll(`${bereich} ${sel}`)].indexOf(el);
+  const getippt = 'value' in el && el.type !== 'checkbox' && el.value !== el.defaultValue ? el.value : null;
+  const auswahl = 'selectionStart' in el && el.selectionStart != null ? [el.selectionStart, el.selectionEnd] : null;
+  return { sel, bereich, n, getippt, auswahl };
+}
+function fokusSetzen(m) {
+  if (!m) return;
+  const el = document.querySelectorAll(`${m.bereich} ${m.sel}`)[Math.max(0, m.n)];
+  if (!el) return;
+  if (m.getippt != null) el.value = m.getippt;
+  el.focus({ preventScroll: true });
+  if (m.auswahl && 'setSelectionRange' in el) try { el.setSelectionRange(...m.auswahl); } catch (e) { /* nicht unterstützt */ }
+}
+
+// Neuzeichnen nach Eingaben verzögern, bis der Fokus gewechselt hat und kein Zeiger gedrückt ist
+let renderGeplant = null, zeigerUnten = false, wartetAufZeiger = false;
+function spaeterRendern() {
+  if (renderGeplant) return;
+  renderGeplant = setTimeout(() => {
+    renderGeplant = null;
+    if (zeigerUnten) { wartetAufZeiger = true; return; }
+    render();
+  }, 0);
+}
+document.addEventListener('pointerdown', () => { zeigerUnten = true; }, true);
+const zeigerLos = () => { zeigerUnten = false; if (wartetAufZeiger) { wartetAufZeiger = false; setTimeout(render, 0); } };
+document.addEventListener('pointerup', zeigerLos, true);
+document.addEventListener('pointercancel', zeigerLos, true);
+
 function render() {
+  clearTimeout(renderGeplant); renderGeplant = null;
   const f = fall();
-  const aktivEl = document.activeElement;
-  const fokus = aktivEl?.dataset?.bind || null;
-  const auswahl = fokus && 'selectionStart' in aktivEl ? [aktivEl.selectionStart, aktivEl.selectionEnd] : null;
+  const fokus = fokusMerken();
   const scrollSheet = $('.sheet-inhalt')?.scrollTop;
 
   renderNav(f);
@@ -36,13 +74,7 @@ function render() {
   renderSheet(f);
   if (ansicht[0] === 'familie') requestAnimationFrame(zeichneLinien);
 
-  if (fokus) {
-    const el = document.querySelector(`[data-bind="${CSS.escape(fokus)}"]`);
-    if (el && el !== document.activeElement) {
-      el.focus({ preventScroll: true });
-      if (auswahl && 'setSelectionRange' in el) try { el.setSelectionRange(...auswahl); } catch (e) { /* Datumsfelder */ }
-    }
-  }
+  fokusSetzen(fokus);
   if (scrollSheet != null && $('.sheet-inhalt')) $('.sheet-inhalt').scrollTop = scrollSheet;
 }
 
@@ -122,10 +154,10 @@ function zeichneLinien() {
 
 // ------------------------------------------------------------------ Werte setzen
 
-function aendern(fn, { neuRendern = true } = {}) {
+function aendern(fn, { neuRendern = true, spaeter = false } = {}) {
   fn(fall());
   speichern();
-  if (neuRendern) render();
+  if (neuRendern) (spaeter ? spaeterRendern() : render());
 }
 
 function wertAusElement(el) {
@@ -138,7 +170,7 @@ function wertAusElement(el) {
   return v;
 }
 
-function setzeBindung(pfad, wert) {
+function setzeBindung(pfad, wert, optionen = {}) {
   aendern((f) => {
     if (pfad.startsWith('__fall.')) { setzePfad(f, pfad.slice(7), wert); return; }
     if (pfad.endsWith('.ausgleichModus')) {
@@ -164,7 +196,7 @@ function setzeBindung(pfad, wert) {
       if (wert !== 'immobilie') a.nutzung = 'sonstige';
       else if (!a.nutzung || a.nutzung === 'sonstige') a.nutzung = 'familienheim';
     }
-  });
+  }, optionen);
 }
 
 // ------------------------------------------------------------------ Aktionen
@@ -277,7 +309,7 @@ const AKTIONEN = {
     const datum = letztes ? addJahre(letztes, 1 / 12) : addJahre(f.stichtag, 2 / 12);
     const basis = { id: neueId('st'), typ: d.typ, datum };
     if (d.typ === 'schenkung') Object.assign(basis, { von: f.geber.a, gegenstaende: f.vermoegen[0] ? [{ assetId: f.vermoegen[0].id, quote: 1 }] : [], empfaenger: {}, nutzung: { typ: 'keine' }, gegenleistungen: [] });
-    if (d.typ === 'gueterstand') Object.assign(basis, { rueckkehr: true, urkunden: 'zwei', ausgleich: 'berechnet', erfuellung: [] });
+    if (d.typ === 'gueterstand') Object.assign(basis, { rueckkehr: true, urkunden: 'eine', ausgleich: 'berechnet', erfuellung: [] });
     if (d.typ === 'verfuegung') {
       const slots = f.geber.b ? ['a', 'b'] : ['a'];
       Object.assign(basis, { form: 'erbvertrag', fuer: slots, regelungen: Object.fromEntries(slots.map((sl) => [sl, tiefeKopie(f.verfuegungen?.[sl] || { typ: 'gesetzlich' })])) });
@@ -297,6 +329,10 @@ const AKTIONEN = {
 
   'ereignis-umschalten': (d) => { state.offenSz = state.offenSz || {}; state.offenSz[d.id] = !state.offenSz[d.id]; render(); },
   'sz-reihenfolge': (d) => { state.szReihenfolge = d.id; render(); },
+  uebertragbar: (d) => aendern((f) => {
+    const nb = f.ziel.nebenbedingungen = f.ziel.nebenbedingungen || {};
+    nb.nichtUebertragen = d.art === 'immobilien' ? f.vermoegen.filter((a) => a.art !== 'immobilie').map((a) => a.id) : [];
+  }),
   'vorschlaege-umschalten': () => { state.vorschlaegeOffen = state.vorschlaegeOffen === false; render(); },
   'vorschlag-uebernehmen': (d) => {
     const v = vorschlaegeFuer(fall());
@@ -414,7 +450,7 @@ document.addEventListener('change', (e) => {
     toast('Datum bitte als TT.MM.JJJJ eingeben, z. B. 22.03.1949');
     return;
   }
-  setzeBindung(el.dataset.bind, wert);
+  setzeBindung(el.dataset.bind, wert, { spaeter: true });
 });
 
 // Datumsfelder: Punkte beim Tippen ergänzen

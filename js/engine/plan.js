@@ -107,6 +107,7 @@ function zahleMehrere(st, vonId, posten) {
   }
   const offen = gesamt - verfuegbar * anteil;
   if (offen > 0.5) {
+    hinweis(st, 'warnung', 'Liquidität reicht nicht', `${name(st.fall, vonId)} fehlen für ${posten.map((p) => p[2]).filter((x, i, l) => l.indexOf(x) === i).join(', ')} rund ${fmtEuro(offen)} an Geld und Wertpapieren. Gerechnet ist mit einer Forderung (Stundung). Erfüllung durch Grundbesitz an Erfüllungs statt ist einkommensteuerlich eine Veräußerung (§ 23 EStG).`, { norm: '§ 23 Abs. 1 S. 1 Nr. 1 EStG' });
     for (const [an, betrag, text] of posten) {
       if (!(betrag > 0)) continue;
       const teil = (offen * betrag) / gesamt;
@@ -167,12 +168,12 @@ function position(st, { asset, quote, an, von, datum, erbfall, text, mitRechten 
     } else if (ehe && erbfall && st.fall.selbstnutzung?.[an] !== false) {
       befreitQuote = 1;
       pos.befreiungen.push({ norm: '§ 13 Abs. 1 Nr. 4b ErbStG', text: 'Familienheim an Ehegatten (10 Jahre Selbstnutzung)', betrag: wert });
-      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim 10 Jahre selbst bewohnen; sonst entfällt die Befreiung rückwirkend.`, { norm: '§ 13 Abs. 1 Nr. 4b ErbStG' });
+      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim 10 Jahre selbst bewohnen; sonst entfällt die Befreiung rückwirkend, es sei denn, zwingende Gründe (z. B. Pflegebedürftigkeit) hindern die Selbstnutzung.`, { norm: '§ 13 Abs. 1 Nr. 4b ErbStG' });
     } else if (erbfall && st.fall.selbstnutzung?.[an] === true && kindOderKindesKind(st.fall, von, an)) {
       const qm = Number(asset.wohnflaeche) || 0;
       befreitQuote = qm > 0 ? Math.min(1, R.familienheimKinderQm / qm) : 1;
       pos.befreiungen.push({ norm: '§ 13 Abs. 1 Nr. 4c ErbStG', text: qm > R.familienheimKinderQm ? `Familienheim an Kind (${R.familienheimKinderQm} von ${qm} m²)` : 'Familienheim an Kind', betrag: wert * befreitQuote });
-      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim unverzüglich beziehen und 10 Jahre selbst bewohnen.`, { norm: '§ 13 Abs. 1 Nr. 4c ErbStG' });
+      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim unverzüglich beziehen und 10 Jahre selbst bewohnen, es sei denn, zwingende Gründe hindern die Selbstnutzung.`, { norm: '§ 13 Abs. 1 Nr. 4c ErbStG' });
     }
   }
   const quote13d = istImmobilie(asset) && asset.nutzung === 'vermietet_wohnen' ? R.befreiungWohnvermietung : 0;
@@ -338,7 +339,12 @@ function schenkung(st, s) {
       titel, positionen, steuerUebernahme: !!s.steuerUebernahme, schrittId: s.id
     });
     if (istMinderjaehrig(personMap(fall).get(an), s.datum)) {
-      hinweis(st, 'info', 'Minderjähriger Erwerber', `${name(fall, an)} ist am ${fmtDatum(s.datum)} minderjährig: Ergänzungspfleger und ggf. familiengerichtliche Genehmigung prüfen.`, { norm: '§§ 1629, 1809, 1850 BGB' });
+      const elternteil = steuerklasse(fall, von, an, 'schenkung').beziehung === 'Kind';
+      if (elternteil && teile.some((t) => istImmobilie(t.a))) {
+        hinweis(st, 'info', 'Minderjähriger Erwerber', `${name(fall, an)} ist am ${fmtDatum(s.datum)} minderjährig. Grundbesitz mit Nießbrauch, Vermietung oder Rückforderungsrecht ist nicht lediglich rechtlich vorteilhaft: Ergänzungspfleger und ggf. familiengerichtliche Genehmigung prüfen.`, { norm: '§§ 107, 1629 Abs. 2, 1824, 1809, 1850 ff. BGB' });
+      } else if (!elternteil) {
+        hinweis(st, 'info', 'Minderjähriger Erwerber', `${name(fall, an)} ist am ${fmtDatum(s.datum)} minderjährig. Die Verwaltung durch die Eltern kann ausgeschlossen werden (Anordnung nach § 1638 BGB).`, { norm: '§ 1638 BGB' });
+      }
     }
   }
 
@@ -490,7 +496,7 @@ function gueterstand(st, s) {
     return;
   }
   if (st.gueterstand !== 'zugewinn') {
-    hinweis(st, 'warnung', 'Güterstandsschaukel nicht möglich', 'Die Ehegatten leben nicht in Zugewinngemeinschaft. Für Ehegatten in Gütertrennung kommt eine rückwirkende Vereinbarung der Zugewinngemeinschaft in Betracht (Rückwirkung nur güterrechtlich anerkannt, § 5 Abs. 1 S. 4 ErbStG).');
+    hinweis(st, 'warnung', 'Güterstandsschaukel nicht möglich', 'Die Ehegatten leben nicht in Zugewinngemeinschaft. Bei Gütertrennung kommt eine rückwirkend vereinbarte Zugewinngemeinschaft in Betracht; sie wird bei güterrechtlicher Beendigung anerkannt (§ 5 Abs. 2 ErbStG), für § 5 Abs. 1 ErbStG gilt erst der Tag des Vertragsschlusses (§ 5 Abs. 1 S. 4 ErbStG).');
     return;
   }
   if (!st.anfangErfasst) {
@@ -546,15 +552,15 @@ function gueterstand(st, s) {
   const gericht1 = uebertragen.filter((u) => istImmobilie(u.asset)).map((u) => ({ kv: '14110', text: `Eigentumsumschreibung „${u.asset.bezeichnung}“`, wert: vw(u.asset) * u.q, satz: 1.0 }));
   if (uebertragen.length) notar1.push({ kv: '22114', text: 'XML-Strukturdaten', wert: erfuellt, satz: 0.3, max: 250 });
   const rueckkehr = s.rueckkehr !== false;
-  const eineUrkunde = s.urkunden === 'eine';
+  const eineUrkunde = s.urkunden !== 'zwei';
   if (rueckkehr && eineUrkunde) notar1[0].text = 'Ehevertrag (Gütertrennung, Ausgleich, Neubegründung Zugewinngemeinschaft)';
   kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: 'Ehevertrag: Güterstandswechsel', notar: notar1, gericht: gericht1, grundbuchabrufe: gericht1.length * 2 }) });
   if (rueckkehr && !eineUrkunde) {
     const d2 = s.datumRueckkehr || addJahre(s.datum, 1 / 12);
     kostenBuchen(st, { datum: d2, schrittId: s.id, ...urkunde({ titel: 'Ehevertrag: Rückkehr zur Zugewinngemeinschaft', notar: [{ kv: '21100', text: 'Ehevertrag (Zugewinngemeinschaft)', wert: wert100, satz: 2.0, min: 120 }] }) });
   }
-  if (rueckkehr && eineUrkunde) {
-    hinweis(st, 'risiko', 'Schaukel in einer Urkunde', 'Gütertrennung und Rückkehr zur Zugewinngemeinschaft in derselben Urkunde erhöhen das Risiko, dass die Finanzverwaltung den Ausgleich als freigebig ansieht. Getrennte Urkunden mit zeitlichem Abstand sind vorzugswürdig.', { norm: '§ 5 Abs. 2 ErbStG' });
+  if (rueckkehr) {
+    hinweis(st, 'info', 'Güterstandsschaukel', 'Steuerlich auch in einer Urkunde anerkannt (Gütertrennung, Ausgleich, Neubegründung der Zugewinngemeinschaft; BFH II R 29/02). Getrennte Urkunden allenfalls zur Abwehr von Pflichtteilsergänzung oder Anfechtung; die Pflichtteilsfestigkeit ist nicht abschließend geklärt.', { norm: '§ 5 Abs. 2 ErbStG' });
   }
 
   // Neuer Güterstand
@@ -628,7 +634,7 @@ function verfuegung(st, s) {
   const slots = (s.fuer || ['a', 'b']).filter((sl) => fall.geber[sl] && st.lebend.has(fall.geber[sl]));
   for (const sl of slots) st.verfuegungen[sl] = tiefeKopie(s.regelungen?.[sl] || s.regelungen?.a || {});
   const form = s.form || 'erbvertrag';
-  const wert = summe(slots, (sl) => {
+  const wertSlot = (sl) => {
     const id = fall.geber[sl];
     let aktiva = 0, passiva = 0;
     for (const [aid, own] of Object.entries(st.eigentum)) {
@@ -638,13 +644,23 @@ function verfuegung(st, s) {
       else { aktiva += vw(as) * q; passiva += (Number(as.verbindlichkeit) || 0) * q; }
     }
     return Math.max(0, aktiva - Math.min(passiva, aktiva / 2));
-  });
-  const notar = form === 'einzeltestament'
-    ? [{ kv: '21200', text: 'Testament', wert, satz: 1.0, min: 60 }]
-    : [{ kv: '21100', text: form === 'erbvertrag' ? 'Erbvertrag' : 'Gemeinschaftliches Testament', wert, satz: 2.0, min: 120 }];
-  const sonstige = [{ text: `Registrierung Zentrales Testamentsregister (${slots.length}×)`, betrag: R.gnotkg.ztr * slots.length }];
-  const gericht = form === 'erbvertrag' ? [] : [{ kv: '12100', text: 'Amtliche Verwahrung', betrag: R.gnotkg.testamentVerwahrung }];
-  kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: form === 'erbvertrag' ? 'Erbvertrag' : form === 'einzeltestament' ? 'Testament' : 'Gemeinschaftliches Testament', notar, gericht, sonstige }) });
+  };
+  const wert = summe(slots, wertSlot);
+  const titelU = form === 'erbvertrag' ? 'Erbvertrag' : form === 'einzeltestament' ? 'Testament' : 'Gemeinschaftliches Testament';
+  const ztr = (n) => ({ text: `Registrierung Zentrales Testamentsregister (${n}×)`, betrag: R.gnotkg.ztr * n });
+  // Besondere amtliche Verwahrung (KV 12100): Testamente stets, Erbverträge, wenn nicht ausgeschlossen (§ 34 Abs. 1, 2 BeurkG)
+  const verwahrung = form !== 'erbvertrag' || !s.notarVerwahrung
+    ? [{ kv: '12100', text: 'Besondere amtliche Verwahrung', betrag: R.gnotkg.testamentVerwahrung }] : [];
+  if (form === 'einzeltestament') {
+    // je Erblasser eine eigene Urkunde
+    for (const sl of slots) {
+      const w = wertSlot(sl);
+      kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: slots.length > 1 ? `Testament ${name(fall, fall.geber[sl])}` : 'Testament', notar: [{ kv: '21200', text: 'Testament', wert: w, satz: 1.0, min: 60 }], gericht: verwahrung, sonstige: [ztr(1)] }) });
+    }
+  } else {
+    const notar = [{ kv: '21100', text: titelU, wert, satz: 2.0, min: 120 }];
+    kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: titelU, notar, gericht: verwahrung, sonstige: [ztr(slots.length)] }) });
+  }
   if (s.pflichtteilsverzicht?.length) {
     for (const pid of s.pflichtteilsverzicht) {
       const wertPv = summe(slots, (sl) => {
@@ -813,8 +829,8 @@ function erbfall(st, erblasser, datum, optionen = {}) {
     });
     lastenErben.push({ text: `Pflichtteil ${name(fall, pid)}`, betrag: pt, norm: '§ 10 Abs. 5 Nr. 2 ErbStG' });
     zahlungen.push([pid, pt, 'Pflichtteil']);
-    if (v.typ === 'alleinerbe_ehegatte') {
-      hinweis(st, 'info', 'Pflichtteilsstrafklausel', `Enthält das Testament eine Pflichtteilsstrafklausel, verliert ${name(fall, pid)} durch die Geltendmachung die Schlusserbenstellung. Die Berechnung unterstellt, dass die Schlusserbeneinsetzung bestehen bleibt.`);
+    if (v.typ === 'alleinerbe_ehegatte' && v.schlusserben?.[pid]) {
+      hinweis(st, 'info', 'Pflichtteil nach dem ersten Erbfall', `Gerechnet ist, dass ${name(fall, pid)} Schlusserbe bleibt. Das setzt voraus, dass eine Pflichtteilsstrafklausel nur bei Geltendmachung gegen den Willen des Längerlebenden greift. Der Anspruch muss innerhalb der Verjährung (3 Jahre, §§ 195, 199 BGB) ernsthaft geltend gemacht werden; die Erfüllung kann gestundet werden. Nach Verjährung oder beim Tod des Längerlebenden ist kein Abzug mehr möglich (BFH II R 17/16).`, { norm: '§§ 2303, 2317 BGB; § 10 Abs. 5 Nr. 2 ErbStG' });
     }
   }
 
@@ -887,13 +903,13 @@ function erbfall(st, erblasser, datum, optionen = {}) {
     const vermachtWert = summe([...vermachteAnteile.entries()], ([id, xs]) => vw(st.vermoegen.get(id)) * summe(xs, (x) => x.q));
     const verfuegbar = Math.max(0, nachlassVW - summe(lastenErben, (l) => l.betrag) - vermachtWert);
     // optionaler Höchstanteil am Nachlass (z. B. zur Absicherung des Längerlebenden)
-    for (const vmx of new Set(geldVm.map((g) => g.vm))) {
-      const anteil = Number(vmx.maxNachlassAnteil);
-      if (!(anteil > 0 && anteil < 1)) continue;
-      const teil = geldVm.filter((g) => g.vm === vmx);
-      const s = summe(teil, (g) => g.betrag);
+    // gemeinsame Grenze für alle Vermächtnisse mit Höchstanteil (nicht je Vermächtnis)
+    const begrenzt = geldVm.filter((g) => Number(g.vm.maxNachlassAnteil) > 0 && Number(g.vm.maxNachlassAnteil) < 1);
+    if (begrenzt.length) {
+      const anteil = Math.max(...begrenzt.map((g) => Number(g.vm.maxNachlassAnteil)));
+      const s = summe(begrenzt, (g) => g.betrag);
       const grenze = Math.max(0, nachlassVW * anteil);
-      if (s > grenze) teil.forEach((g) => (g.betrag = (g.betrag * grenze) / s));
+      if (s > grenze) begrenzt.forEach((g) => (g.betrag = (g.betrag * grenze) / s));
     }
     const gewuenscht = summe(geldVm.filter((g) => g.vm.faelligkeit !== 'tod_beschwerter'), (g) => g.betrag);
     const faktor = gewuenscht > verfuegbar && gewuenscht > 0 ? verfuegbar / gewuenscht : 1;
@@ -917,7 +933,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
       zahlungen.push([g.an, betrag, 'Vermächtnis']);
     }
     if (geldVm.some((g) => g.vm.typ === 'freibetrag')) {
-      hinweis(st, 'info', 'Freibetragsvermächtnis', 'Die Höhe des Vermächtnisses ist auf den verbleibenden Freibetrag gegenüber dem Erstversterbenden bemessen (Zweck- bzw. „Super“-Vermächtnis, §§ 2151, 2156 BGB). Bestimmungsrecht und Fälligkeit sollten so gestaltet sein, dass die Fälligkeit nicht an den Tod des Längerlebenden geknüpft ist.', { norm: '§§ 2151, 2156 BGB; § 6 Abs. 4 ErbStG' });
+      hinweis(st, 'info', 'Freibetragsvermächtnis', 'Die Höhe ist auf den verbleibenden Freibetrag gegenüber dem Erstversterbenden bemessen (Zweck- bzw. „Super“-Vermächtnis). Der Längerlebende bestimmt Bedachte, Anteile, Gegenstand und Zeitpunkt nach billigem Ermessen; ein spätester Erfüllungstermin (üblich: 3 Jahre nach dem ersten Erbfall) und ein Ersatzbestimmungsberechtigter sind festzulegen. Ohne Termin ist das Vermächtnis im Zweifel erst beim Tod des Längerlebenden fällig (§ 2181 BGB) und gilt als Erwerb von ihm (§ 6 Abs. 4 ErbStG). Gerechnet ist mit Erfüllung in Geld; die Erfüllung mit Grundbesitz an Erfüllungs statt ist einkommensteuerlich entgeltlich (§ 23 EStG).', { norm: '§§ 2151, 2153, 2156, 2181 BGB; § 6 Abs. 4 ErbStG' });
     }
   }
   for (const [an, positionen] of vmErwerbe) {
@@ -1029,7 +1045,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
     const wert = Math.max(0, nachlassVW);
     kostenBuchen(st, {
       datum, ...urkunde({
-        titel: `Erbschein (${name(fall, erblasser)})`,
+        titel: `Erbschein (${name(fall, erblasser)})`, art: 'erbschein',
         notar: [{ kv: '23300', text: 'Eidesstattliche Versicherung / Erbscheinsantrag', wert, satz: 1.0 }],
         gericht: [{ kv: '12210', text: 'Erteilung des Erbscheins', wert, satz: 1.0 }]
       })
@@ -1152,7 +1168,10 @@ export function simuliere(fall, szenario, optionen = {}) {
   ].sort((x, y) => vergleicheDatum(x.datum, y.datum) || x.i - y.i);
 
   let erster = true;
+  const fluesse = {};
+  const ids = fall.personen.map((p) => p.id);
   for (const ev of ereignisse) {
+    const vorher = Object.fromEntries(ids.map((id) => [id, vermoegenVon(st, id)]));
     if (ev.art === 'schritt') {
       const s = ev.s;
       st.ereignis = `schritt:${s.id}`;
@@ -1165,6 +1184,13 @@ export function simuliere(fall, szenario, optionen = {}) {
       erbfall(st, ev.g, ev.datum, erster ? szenario.erbfallOptionen || {} : { pflichtteil: [] });
       erster = false;
     }
+    // Vermögensfluss: wer erhält de facto wie viel (Verkehrswert, netto, ohne Steuern und Kosten)
+    const fl = {};
+    for (const id of ids) {
+      const d = vermoegenVon(st, id) - vorher[id];
+      if (Math.abs(d) >= 1) fl[id] = Math.round(d);
+    }
+    fluesse[st.ereignis] = fl;
   }
 
   // Kettenschenkungsrisiko
@@ -1184,8 +1210,9 @@ export function simuliere(fall, szenario, optionen = {}) {
   // Pflichtteilsergänzung
   const gaben = st.erwerbe.filter((e) => !e.erbfall && !e.vorschenkung && geberIds(fall).includes(e.von) && !e.steuerfrei);
   const pflichtteilsberechtigteAusserhalb = fall.personen.filter((p) => p.rolle === 'kind' && geberIds(fall).some((g) => p.bezug?.eltern?.includes(slotVon(fall, g))));
-  if (gaben.length && pflichtteilsberechtigteAusserhalb.some((k) => !gaben.some((e) => e.an === k.id))) {
-    hinweis(st, 'info', 'Pflichtteilsergänzung', 'Nicht alle Kinder werden bedacht. Schenkungen lösen Pflichtteilsergänzungsansprüche aus. Bei vorbehaltenem Nießbrauch beginnt die 10-Jahres-Frist nicht; bei Zuwendungen an den Ehegatten nicht vor Auflösung der Ehe.', { norm: '§ 2325 Abs. 3 BGB' });
+  const anEhegatten = st.erwerbe.some((e) => !e.erbfall && !e.vorschenkung && ehegatte(fall, e.von) === e.an);
+  if ((gaben.length && pflichtteilsberechtigteAusserhalb.some((k) => !gaben.some((e) => e.an === k.id))) || anEhegatten) {
+    hinweis(st, 'info', 'Pflichtteilsergänzung', 'Schenkungen lösen Pflichtteilsergänzungsansprüche aus; sie schmelzen um 1/10 je Jahr ab. Bei vorbehaltenem umfassendem Nießbrauch beginnt die Frist nicht (BGH IV ZR 132/93), beim Wohnungsrecht regelmäßig doch (BGH IV ZR 474/15). Bei Zuwendungen an den Ehegatten (auch Familienheim und Güterstandsschaukel) beginnt sie nicht vor Auflösung der Ehe.', { norm: '§ 2325 Abs. 3 BGB' });
   }
   const gemeinsameKonten = fall.vermoegen.filter((a) => a.art === 'geld' && Object.keys(a.eigentum || {}).length > 1);
   if (gemeinsameKonten.length) {
@@ -1210,6 +1237,7 @@ export function simuliere(fall, szenario, optionen = {}) {
     vorschenkungen: st.erwerbe.filter((e) => e.vorschenkung),
     kosten: st.kosten.sort((x, y) => vergleicheDatum(x.datum, y.datum)),
     hinweise: st.hinweise,
+    fluesse,
     zeitachse: st.zeitachse.sort((x, y) => vergleicheDatum(x.datum, y.datum)),
     endEigentum: st.eigentum,
     vermoegen: [...st.vermoegen.values()],
@@ -1218,10 +1246,17 @@ export function simuliere(fall, szenario, optionen = {}) {
       steuerLebzeiten: lebzeiten,
       steuerErbfaelle: steuer - lebzeiten,
       kosten: cent(kosten),
+      kostenNach: kostenNachArt(st.kosten),
       belastung: cent(steuer + kosten),
       freibetragGenutzt: summe(erwerbe, (e) => e.freibetragGenutzt || 0)
     }
   };
+}
+
+function kostenNachArt(kosten) {
+  const r = {};
+  for (const k of kosten) for (const [art, b] of Object.entries(k.anteile || {})) r[art] = cent((r[art] || 0) + b);
+  return r;
 }
 
 /** Beide Sterbereihenfolgen (bei Ehepaaren) für ein Szenario. */

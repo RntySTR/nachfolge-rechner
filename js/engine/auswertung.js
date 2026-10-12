@@ -44,6 +44,7 @@ export function bewerteSzenario(fall, sz, k = kontextFuer(fall), { ohneKettenpru
     steuerLebzeiten: gewichtet((l) => l.summen.steuerLebzeiten),
     steuerErbfaelle: gewichtet((l) => l.summen.steuerErbfaelle),
     kosten: gewichtet((l) => l.summen.kosten),
+    kostenNach: Object.fromEntries(['notar', 'grundbuch', 'erbschein', 'nachlass'].map((k) => [k, gewichtet((l) => l.summen.kostenNach?.[k] || 0)])),
     ziel: laeufe.map((l) => zielabgleich(fall, l)),
     risiken: Math.max(...laeufe.map((l) => l.hinweise.filter((h) => h.stufe === 'risiko' || h.stufe === 'warnung').length))
   };

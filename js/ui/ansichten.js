@@ -164,7 +164,7 @@ export function ansichtAusgangslage(f) {
       </div>
       ${ehepaar ? `<div class="flaeche raster">
         <h3>Zugewinn</h3>
-        <p class="small muted">Anfangsvermögen bei Eheschließung, bereits auf heutige Kaufkraft hochgerechnet (§ 1376 BGB). Ohne Angabe wird der steuerfreie Zugewinnausgleich im Erbfall nicht angesetzt.</p>
+        <p class="small muted">Anfangsvermögen bei Eheschließung einschließlich späterer Erbschaften und Schenkungen (§ 1374 Abs. 2 BGB), nach der Rechtsprechung um den Kaufkraftverlust bereinigt. Ohne Angabe wird § 5 Abs. 1 ErbStG im Erbfall nicht angesetzt; bei der Güterstandsschaukel gilt 0 €, der Ausgleich fällt dann eher zu hoch aus.</p>
         <div class="raster zwei">
           ${eurofeld(`Anfangsvermögen ${nameVon(f, f.geber.a)}`, 'anfangsvermoegen.a', f.anfangsvermoegen?.a)}
           ${eurofeld(`Anfangsvermögen ${nameVon(f, f.geber.b)}`, 'anfangsvermoegen.b', f.anfangsvermoegen?.b)}
@@ -226,12 +226,11 @@ export function ansichtZiel(f) {
     <div class="raster" style="gap:16px">${inhalt}</div>
     <section class="abschnitt">
       <h2>Rahmenbedingungen</h2>
-      <p class="muted">Werden bei Hinweisen und bei der Bewertung der Szenarien berücksichtigt.</p>
+      <p class="muted">Steuern die Vorschläge des Rechners und die Hinweise.</p>
       <div class="flaeche raster">
-        ${f.geber.b ? schalter('ziel.nebenbedingungen.laengerlebenderAbgesichert', nb.laengerlebenderAbgesichert, 'Der Längerlebende muss abgesichert bleiben', 'Warnt, wenn Vermächtnisse oder Schenkungen ihm den Großteil entziehen.') : ''}
+        ${f.geber.b ? schalter('ziel.nebenbedingungen.laengerlebenderAbgesichert', nb.laengerlebenderAbgesichert, 'Der Längerlebende muss abgesichert bleiben', 'Vorschläge begrenzen Vermächtnisse beim ersten Erbfall auf die Hälfte des Nachlasses, geben ihm den Folgenießbrauch und verzichten auf die Ausschlagung; Warnung bei Überschreitung.') : ''}
         ${schalter('ziel.nebenbedingungen.enkelEinbeziehen', nb.enkelEinbeziehen, 'Enkel dürfen einbezogen werden', 'Erlaubt Gestaltungen über die Enkelfreibeträge.')}
         ${f.geber.b ? schalter('ziel.nebenbedingungen.keineSchaukel', nb.keineSchaukel, 'Keine Güterstandsschaukel', 'Etwa wenn die Mandanten einen Wechsel des Güterstands ablehnen.') : ''}
-        ${f.geber.b ? schalter('ziel.nebenbedingungen.ehegatteNichtsEndgueltig', nb.ehegatteNichtsEndgueltig, 'Der Ehegatte soll nichts endgültig erhalten', 'Etwa bei Vor- und Nacherbschaft oder einseitigen Kindern.') : ''}
       </div>
     </section>`;
 }

@@ -525,3 +525,32 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   .flaeche, .kachel, .hinweis, .asset { break-inside: avoid; }
   body { font-size: 11pt; }
 }
+
+/* Belastung nach Herkunft */
+.belastung { background: var(--surface-warm); padding: 20px 22px; }
+.bl-kopf { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.bl-kopf .lbl { display: block; font-size: 12px; color: var(--muted); }
+.bl-kopf .fig { display: block; margin: 6px 0 2px; font: 500 28px/1.1 var(--font-display); color: var(--ink); }
+.bl-zeilen { display: grid; gap: 8px; margin-top: 16px; }
+.bl-zeile { display: grid; grid-template-columns: minmax(120px, 230px) minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 14px; color: var(--text); }
+.bl-zeile b { font: 500 14px/1 var(--font-display); color: var(--ink); min-width: 96px; text-align: right; }
+.bl-balken { height: 10px; background: var(--surface-sunk); display: block; }
+.bl-balken span { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.bl-balken .steuer { background: var(--brand); }
+.bl-balken .kosten { background: var(--p2); }
+
+/* Vermögensfluss je Ereignis */
+.ab-fluss { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
+.fluss { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+.fluss .av { width: 22px; height: 22px; font-size: 9px; }
+.fluss b { font: 500 13px/1 var(--font-display); color: var(--ink); }
+
+/* Übertragbare Vermögenswerte */
+.vs-assets { margin: 4px 0 18px; }
+.vs-assets .lbl { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.vs-assets .chip svg { flex: none; }
+
+@media (max-width: 600px) {
+  .bl-zeile { grid-template-columns: 1fr auto; }
+  .bl-zeile .bl-balken { grid-column: 1 / -1; grid-row: 2; }
+}

@@ -167,16 +167,22 @@ export function gesetzlicheErbquoten(fall, erblasserId, lebend, gueterstand) {
   const staemme = verteilungNachStaemmen(fall, eigeneKinder(fall, erblasserId), lebend);
   const hatAbkoemmlinge = Object.keys(staemme).length > 0;
 
+  const slot = slotVon(fall, erblasserId);
+  const zweiteOrdnung = fall.personen.filter((p) => ['eltern', 'geschwister'].includes(p.rolle) && p.bezug?.von === slot && lebend.has(p.id));
   let eheQuote = 0;
   if (eheLebt) {
     if (!hatAbkoemmlinge) {
-      eheQuote = 1;
-      hinweise.push('Ohne Abkömmlinge ist der Ehegatte vereinfachend als Alleinerbe angesetzt (Eltern und Geschwister des Erblassers nicht berücksichtigt).');
+      if (zweiteOrdnung.length) {
+        eheQuote = gueterstand === 'zugewinn' ? 0.75 : 0.5; // § 1931 Abs. 1, § 1371 Abs. 1 BGB
+      } else {
+        eheQuote = 1; // § 1931 Abs. 2 BGB
+        hinweise.push('Ohne Abkömmlinge und ohne erfasste Eltern oder Geschwister ist der Ehegatte als Alleinerbe angesetzt (Großeltern nicht berücksichtigt).');
+      }
     } else if (gueterstand === 'zugewinn') {
       eheQuote = 0.5; // § 1931 Abs. 1, § 1371 Abs. 1 BGB
     } else if (gueterstand === 'guetertrennung') {
-      const n = eigeneKinder(fall, erblasserId).length;
-      eheQuote = n === 1 ? 1 / 2 : n === 2 ? 1 / 3 : 1 / 4; // § 1931 Abs. 4 BGB
+      const n = Object.keys(verteilungNachStaemmen(fall, eigeneKinder(fall, erblasserId), lebend)).length ? eigeneKinder(fall, erblasserId).filter((k) => lebend.has(k.id) || hatLebendeAbkoemmlinge(fall, k.id, lebend)).length : 0;
+      eheQuote = n === 1 ? 1 / 2 : n === 2 ? 1 / 3 : 1 / 4; // § 1931 Abs. 4 BGB: nur erbende Stämme
     } else {
       eheQuote = 0.25;
     }
@@ -187,7 +193,6 @@ export function gesetzlicheErbquoten(fall, erblasserId, lebend, gueterstand) {
   if (hatAbkoemmlinge) {
     for (const [id, q] of Object.entries(staemme)) quoten[id] = (quoten[id] || 0) + q * rest;
   } else if (rest > 0) {
-    const slot = slotVon(fall, erblasserId);
     const eltern = fall.personen.filter((p) => p.rolle === 'eltern' && p.bezug?.von === slot && lebend.has(p.id));
     const geschw = fall.personen.filter((p) => p.rolle === 'geschwister' && p.bezug?.von === slot && lebend.has(p.id));
     const gruppe = eltern.length ? eltern : geschw;
@@ -221,8 +226,8 @@ export function pflichtteilsquote(fall, erblasserId, personId, lebend, guetersta
   const { quoten } = gesetzlicheErbquoten(fall, erblasserId, lebend, gueterstand);
   let q = quoten[personId] || 0;
   if (kleinerPflichtteil && ehegatte(fall, erblasserId) === personId && gueterstand === 'zugewinn') {
-    // Ohne Erhöhung nach § 1371 Abs. 1 BGB: neben Abkömmlingen 1/4
-    q = q > 0 && q < 1 ? 0.25 : q;
+    // Ohne Erhöhung nach § 1371 Abs. 1 BGB: neben Abkömmlingen 1/4, neben Eltern/Geschwistern 1/2
+    q = q > 0 && q < 1 ? q - 0.25 : q;
   }
   return q / 2;
 }

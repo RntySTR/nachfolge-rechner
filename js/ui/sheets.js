@@ -50,6 +50,10 @@ function sheetPerson(f, id) {
     bezug = feld('Bezogen auf', segment(`${pf}.bezug.von`, p.bezug?.von || 'a', geberSlots(f).map((s) => [s, nameVon(f, f.geber[s])])));
   }
   const famHeim = f.vermoegen.some((a) => a.nutzung === 'familienheim');
+  const besonderheiten = [
+    !istGeber && (p.rolle === 'kind' || p.rolle === 'enkel') ? schalter(`${pf}.vorverstorben`, p.vorverstorben, 'Bereits verstorben', p.rolle === 'kind' ? 'Dessen Kinder treten an seine Stelle; sie erhalten den Freibetrag von 400.000 €.' : 'Dessen Kinder treten an seine Stelle; Urenkel erhalten den Freibetrag von 100.000 €.') : '',
+    famHeim ? schalter(`selbstnutzung.${p.id}`, istGeber ? f.selbstnutzung?.[p.id] !== false : !!f.selbstnutzung?.[p.id], 'Würde das Familienheim nach einem Erbfall selbst bewohnen', istGeber ? 'Voraussetzung für die Steuerbefreiung nach § 13 Abs. 1 Nr. 4b ErbStG.' : 'Voraussetzung für die Steuerbefreiung nach § 13 Abs. 1 Nr. 4c ErbStG (bis 200 m²).') : ''
+  ].join('');
   const inhalt = `
     <div class="gruppe">
       ${textfeld('Vorname', `${pf}.vorname`, p.vorname, { platzhalter: istGeber ? (p.id === f.geber.a ? 'z. B. Klaus' : 'z. B. Gabriele') : 'Vorname' })}
@@ -59,10 +63,7 @@ function sheetPerson(f, id) {
       <div class="chips">${ROLLEN.map(([k, t]) => `<button type="button" class="chip ohneavatar" data-set="${pf}.rolle" data-wert="${k}" aria-pressed="${p.rolle === k}">${esc(t)}</button>`).join('')}</div>
       ${bezug}
     </div>`}
-    <div class="gruppe"><div class="gt">Besonderheiten</div>
-      ${!istGeber && (p.rolle === 'kind' || p.rolle === 'enkel') ? schalter(`${pf}.vorverstorben`, p.vorverstorben, 'Bereits verstorben', 'Seine Kinder treten an seine Stelle; sie erhalten den Freibetrag von 400.000 €.') : ''}
-      ${famHeim ? schalter(`selbstnutzung.${p.id}`, istGeber ? f.selbstnutzung?.[p.id] !== false : !!f.selbstnutzung?.[p.id], 'Würde das Familienheim nach einem Erbfall selbst bewohnen', istGeber ? 'Voraussetzung für die Steuerbefreiung nach § 13 Abs. 1 Nr. 4b ErbStG.' : 'Voraussetzung für die Steuerbefreiung nach § 13 Abs. 1 Nr. 4c ErbStG (bis 200 m²).') : ''}
-    </div>`;
+    ${besonderheiten ? `<div class="gruppe"><div class="gt">Besonderheiten</div>${besonderheiten}</div>` : ''}`;
   const fuss = istGeber ? '' : aktionsknopf('person-loeschen', 'Person entfernen', { ico: 'trash-2', cls: 'klein gefahr', daten: { id: p.id } });
   return { titel: istGeber ? 'Vermögensgeber' : rolleText(p, f), inhalt, fuss };
 }
@@ -145,13 +146,13 @@ function vermaechtnisKarte(f, pf, vm, ehepaar, k) {
   let felder = '';
   if (vm.typ === 'geld') felder = feld('Betrag je Bedachtem', euroEingabe(`${pf}.betrag`, vm.betrag));
   if (vm.typ === 'gegenstand') felder = `${auswahl('Gegenstand', `${pf}.assetId`, vm.assetId, f.vermoegen.map((a) => [a.id, a.bezeichnung]), { leer: 'Bitte wählen' })}${feld('Anteil am Anteil des Erblassers', quoteEingabe(`${pf}.quote`, vm.quote ?? 1))}`;
-  if (vm.typ === 'freibetrag') felder = `${feld('Höchstbetrag je Bedachtem (optional)', euroEingabe(`${pf}.betragMax`, vm.betragMax))}<p class="small muted">Bemessen auf den verbleibenden Freibetrag gegenüber dem Erblasser; der Längerlebende bestimmt Zeitpunkt und Gegenstand (§§ 2151, 2156 BGB).</p>`;
+  if (vm.typ === 'freibetrag') felder = `${feld('Höchstbetrag je Bedachtem (optional)', euroEingabe(`${pf}.betragMax`, vm.betragMax))}<p class="small muted">Bemessen auf den verbleibenden Freibetrag gegenüber dem Erblasser; der Längerlebende bestimmt Gegenstand und Zeitpunkt nach billigem Ermessen, spätestens 3 Jahre nach dem Erbfall (§§ 2151, 2153, 2156, 2181 BGB).</p>`;
   if (vm.typ === 'niessbrauch') felder = '<p class="small muted">Nießbrauch am gesamten Nachlass. Die Erben werden mit dem Kapitalwert belastet.</p>';
   return `<div class="unterkarte">
     <div class="kopfzeile"><b style="font:500 14px/1.2 var(--font-display);color:var(--ink)">${titel}</b>${iconknopf('liste-entfernen', 'trash-2', 'Vermächtnis entfernen', { pfad: pf.replace(/\.\d+$/, ''), index: k })}</div>
     ${feld(vm.typ === 'niessbrauch' ? 'Berechtigt' : 'Bedacht', personenChips(f, `${pf}.an`, an, f.personen.filter((p) => p.rolle !== 'geber' || vm.typ === 'niessbrauch')))}
     ${felder}
-    ${vm.typ === 'geld' || vm.typ === 'freibetrag' ? feld('Fälligkeit', segment(`${pf}.faelligkeit`, vm.faelligkeit || 'erbfall', [['erbfall', 'Mit dem Erbfall'], ['tod_beschwerter', 'Beim Tod des Erben']]), vm.faelligkeit === 'tod_beschwerter' ? 'Achtung: gilt steuerlich als Erwerb vom Erben (§ 6 Abs. 4 ErbStG).' : '') : ''}
+    ${vm.typ === 'geld' || vm.typ === 'freibetrag' ? feld('Fälligkeit', segment(`${pf}.faelligkeit`, vm.faelligkeit || 'erbfall', [['erbfall', 'Mit dem Erbfall'], ['tod_beschwerter', 'Beim Tod des Beschwerten']]), vm.faelligkeit === 'tod_beschwerter' ? 'Achtung: gilt steuerlich als Erwerb vom Beschwerten (§ 6 Abs. 4 ErbStG).' : '') : ''}
     ${ehepaar ? schalter(`${pf}.nurErsterErbfall`, vm.nurErsterErbfall ?? (vm.typ === 'freibetrag' || vm.typ === 'niessbrauch'), 'Nur, wenn der Ehegatte überlebt') : ''}
   </div>`;
 }
@@ -272,8 +273,8 @@ function gueterstandEditor(f, pf, s) {
   return `
     <div class="gruppe"><div class="gt">Ablauf</div>
       ${schalter(`${pf}.rueckkehr`, s.rueckkehr !== false, 'Anschließend wieder Zugewinngemeinschaft', 'Güterstandsschaukel: Gütertrennung, Ausgleich, Rückkehr.')}
-      ${s.rueckkehr !== false ? feld('Urkunden', segment(`${pf}.urkunden`, s.urkunden || 'zwei', [['zwei', 'Zwei Urkunden'], ['eine', 'Eine Urkunde']]), 'Getrennte Urkunden mit zeitlichem Abstand sind steuerlich vorzugswürdig.') : ''}
-      ${s.rueckkehr !== false && (s.urkunden || 'zwei') === 'zwei' ? datumfeld('Datum der Rückkehr', `${pf}.datumRueckkehr`, s.datumRueckkehr, { hilfe: 'Ohne Angabe: einen Monat später.' }) : ''}
+      ${s.rueckkehr !== false ? feld('Urkunden', segment(`${pf}.urkunden`, s.urkunden || 'eine', [['eine', 'Eine Urkunde'], ['zwei', 'Zwei Urkunden']]), 'Steuerlich auch in einer Urkunde anerkannt (BFH II R 29/02). Zwei Urkunden allenfalls zur Abwehr von Pflichtteilsergänzung oder Anfechtung; kostet eine zweite Beurkundung.') : ''}
+      ${s.rueckkehr !== false && s.urkunden === 'zwei' ? datumfeld('Datum der Rückkehr', `${pf}.datumRueckkehr`, s.datumRueckkehr, { hilfe: 'Ohne Angabe: einen Monat später.' }) : ''}
     </div>
     <div class="gruppe"><div class="gt">Zugewinnausgleich</div>
       ${segment(`${pf}.ausgleichModus`, berechnet ? 'berechnet' : 'betrag', [['berechnet', 'Berechnete Höhe'], ['betrag', 'Fester Betrag']])}
@@ -291,6 +292,7 @@ function verfuegungsschrittEditor(f, pf, s) {
   return `
     <div class="gruppe"><div class="gt">Form</div>
       ${segment(`${pf}.form`, s.form || 'erbvertrag', [['erbvertrag', 'Erbvertrag'], ...(f.geber.b ? [['gem_testament', 'Gem. Testament']] : []), ['einzeltestament', 'Testament']])}
+      ${(s.form || 'erbvertrag') === 'erbvertrag' ? schalter(`${pf}.notarVerwahrung`, s.notarVerwahrung, 'Amtliche Verwahrung ausgeschlossen (Verbleib beim Notar)', 'Ohne Ausschluss kommt der Erbvertrag in die besondere amtliche Verwahrung des Nachlassgerichts: 75 € (KV 12100 GNotKG, § 34 Abs. 2 BeurkG). Beim Notar gebührenfrei.') : `<p class="small muted">Testamente kommen stets in die besondere amtliche Verwahrung: 75 € je Urkunde (KV 12100 GNotKG). Einzeltestamente beider Ehegatten sind zwei Urkunden.</p>`}
       ${f.geber.b ? `<div class="chips">${geberSlots(f).map((sl) => `<button type="button" class="chip" data-toggle-liste="${pf}.fuer" data-wert="${sl}" aria-pressed="${fuer.includes(sl)}">${avatar(f, f.geber[sl])}${esc(nameVon(f, f.geber[sl]))}</button>`).join('')}</div>` : ''}
     </div>
     ${fuer.map((sl) => `<div class="gruppe"><div class="gt">Regelung für den Tod von ${esc(nameVon(f, f.geber[sl]))}</div>${verfuegungEditor(f, `${pf}.regelungen.${sl}`, sl)}${fuer.length > 1 && sl === fuer[0] ? `<div>${aktionsknopf('verfuegung-spiegeln', `Für ${nameVon(f, f.geber[fuer[1]])} übernehmen`, { ico: 'copy', cls: 'klein', daten: { pfad: `${pf}.regelungen.${sl}`, slot: sl } })}</div>` : ''}</div>`).join('')}
