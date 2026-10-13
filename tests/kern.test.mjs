@@ -202,17 +202,22 @@ test('Vorschläge: Vermögensausgleich unter Ehegatten mit Gegenleistung', async
   assert.ok(mitV.length > 0, 'Ausgleich wird vorgeschlagen');
   assert.ok(v.liste[0].module.some((m) => m.key === 'V'), 'Ausgleich ist der günstigste Vorschlag');
   if (ohneV.length) assert.ok(mitV[0].ergebnis.erwartet < ohneV[0].ergebnis.erwartet);
-  const schritt = mitV[0].szenario.schritte.find((s) => s.titel === 'Vermögensausgleich unter Ehegatten');
+  // Der günstigste Ausgleich kann das Familienheim auch an die Kinder geben (Baustein H); geprüft wird
+  // der günstigste Vorschlag, in dem der andere Ehegatte eine Gegenleistung erbringt
+  const ausgleichVon = (x) => x.szenario.schritte.find((s) => s.titel === 'Vermögensausgleich unter Ehegatten');
+  const mitGegenleistung = mitV.filter((x) => ausgleichVon(x).gegenleistungen.length);
+  assert.ok(mitGegenleistung.length > 0, 'Ausgleich mit Gegenleistung wird vorgeschlagen');
+  const schritt = ausgleichVon(mitGegenleistung[0]);
   assert.equal(schritt.von, 'F');
   assert.ok(schritt.gegenleistungen.some((g) => g.assetId === 'H' && g.vonId === 'M'), 'Familienheim-Anteil als Gegenleistung');
   assert.ok(!schritt.gegenstaende.some((g) => schritt.gegenleistungen.some((h) => h.assetId === g.assetId)), 'kein Gegenstand in beide Richtungen');
   // Weitergabe durch den anderen Ehegatten: bestehender Nießbrauch wird übernommen, nicht doppelt abgezogen
-  const weiter = mitV[0].szenario.schritte.filter((s) => s.von === 'M' && s.typ === 'schenkung');
+  const weiter = mitGegenleistung[0].szenario.schritte.filter((s) => s.von === 'M' && s.typ === 'schenkung');
   assert.ok(weiter.some((s) => s.nutzung.berechtigte[0] === 'F'));
   for (const s of weiter.filter((x) => x.nutzung.berechtigte[0] === 'F')) {
     assert.ok(Date.parse(s.datum) - Date.parse(schritt.datum) > 366 * 86400000, 'Weitergabe mit Abstand von mehr als einem Jahr');
   }
-  const lauf = mitV[0].ergebnis.laeufe[0];
+  const lauf = mitGegenleistung[0].ergebnis.laeufe[0];
   const e = lauf.erwerbe.find((x) => x.schrittId === schritt.id);
   assert.ok(e.bereicherung <= 500000 + 1, `Ehegattenerwerb ${e.bereicherung}`);
   for (const s of weiter) {
@@ -298,4 +303,52 @@ test('Vorschläge: verworfene Spalten stehen hinter echten Vorschlägen und fül
   // mindestAnzahl lässt sich abschalten
   const ohne = vorschlaege(kleinerFall(), { mindestAnzahl: 0 });
   assert.equal(ohne.liste.length, 0);
+});
+
+/** Konstellation mit fünf Immobilien, versehentlich alle als Familienheim erfasst (fiktive Werte). */
+function fuenfHeimeFall() {
+  const haelfte = { M: 0.5, F: 0.5 };
+  const imm = (id, bez, wert, eigentum) => ({ id, bezeichnung: bez, art: 'immobilie', nutzung: 'familienheim', verkehrswert: wert, eigentum });
+  return {
+    version: 1, id: 'fh', stichtag: '2026-10-13', geber: { a: 'M', b: 'F' }, gueterstand: 'zugewinn', anfangsvermoegen: {},
+    personen: [
+      { id: 'M', vorname: 'Karl', geburt: '1950-03-01', geschlecht: 'm', rolle: 'geber' },
+      { id: 'F', vorname: 'Ruth', geburt: '1949-03-15', geschlecht: 'w', rolle: 'geber' },
+      { id: 'K1', vorname: 'Ida', geburt: '1977-05-01', geschlecht: 'w', rolle: 'kind', bezug: { eltern: ['a', 'b'] } },
+      { id: 'K2', vorname: 'Eva', geburt: '1984-05-01', geschlecht: 'w', rolle: 'kind', bezug: { eltern: ['a', 'b'] } },
+      { id: 'E1', vorname: 'Tom', geburt: '2004-05-01', geschlecht: 'm', rolle: 'enkel', bezug: { elternId: 'K1' } }
+    ],
+    vermoegen: [imm('H1', 'Haus 1', 700000, { ...haelfte }), imm('H2', 'Haus 2', 700000, { ...haelfte }), imm('H3', 'Haus 3', 1500000, { F: 1 }), imm('H4', 'Haus 4', 1000000, { F: 1 }), imm('H5', 'Haus 5', 1000000, { F: 1 })],
+    vorschenkungen: [], verfuegungen: { a: { typ: 'gesetzlich' }, b: { typ: 'gesetzlich' } },
+    ziel: { modus: 'quote', quoten: { K1: 0.5, K2: 0.5 }, assets: {}, nebenbedingungen: { laengerlebenderAbgesichert: true, enkelEinbeziehen: true, keineSchaukel: true } },
+    annahmen: { todesannahme: 'statistisch' },
+    szenarien: [{ id: 'b', name: 'Ohne Gestaltung', basis: true, schritte: [], erbfallOptionen: {} }]
+  };
+}
+
+test('Familienheim: nur die erste als Familienheim erfasste Immobilie ist befreit', () => {
+  const fall = fuenfHeimeFall();
+  const lauf = simuliere(fall, fall.szenarien[0], { annahme: 'statistisch', erstversterbender: 'F' });
+  const ersterErbfall = lauf.erwerbe.filter((e) => e.erbfall && e.von === 'F' && e.an === 'M');
+  const befreit = ersterErbfall.flatMap((e) => e.positionen).filter((p) => p.befreiungen.some((b) => /Nr\. 4b/.test(b.norm)));
+  assert.deepEqual([...new Set(befreit.map((p) => p.assetId))], ['H1']);
+  assert.ok(lauf.hinweise.some((h) => h.titel === 'Nur ein Familienheim'));
+});
+
+test('Vorschläge: mehrstufiges Konzept bei mehreren Immobilien eines Ehegatten', async () => {
+  const { vorschlaege } = await import('../js/engine/strategien.js');
+  const v = vorschlaege(fuenfHeimeFall());
+  const gueltig = v.liste.filter((x) => !x.verworfen);
+  assert.ok(gueltig.length >= 3, `nur ${gueltig.length} Vorschläge`);
+  const bester = gueltig[0];
+  // Vermögensausgleich unter Ehegatten, danach Weitergabe an die Kinder
+  assert.ok(bester.module.some((m) => m.key === 'V'), bester.titel);
+  assert.ok(bester.module.some((m) => m.key === 'S' || m.key === 'S2'), bester.titel);
+  assert.ok(bester.ersparnis > 0.5 * v.basis.erwartet, `Ersparnis ${bester.ersparnis} bei Basis ${v.basis.erwartet}`);
+  // Weitere als Familienheim erfasste Häuser werden lebzeitig übertragen, das Familienheim selbst nicht durch S/S2
+  const schenkungen = bester.szenario.schritte.filter((s) => s.typ === 'schenkung' && s.titel !== 'Vermögensausgleich unter Ehegatten');
+  assert.ok(schenkungen.some((s) => s.gegenstaende.some((g) => ['H3', 'H4', 'H5'].includes(g.assetId))));
+  // Vielfalt: nicht alle Vorschläge mit derselben Vorstufe
+  const vorstufen = new Set(gueltig.map((x) => x.module.filter((m) => ['V', 'F', 'G'].includes(m.key)).map((m) => m.key).join('') || '-'));
+  assert.ok(vorstufen.size >= 2);
 });

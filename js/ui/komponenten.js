@@ -27,13 +27,14 @@ export const ARTEN = [
 
 export const NUTZUNGEN = [
   ['familienheim', 'Selbst bewohnt (Familienheim)'],
+  ['selbstgenutzt', 'Selbst genutzt, kein Familienheim'],
   ['vermietet_wohnen', 'Zu Wohnzwecken vermietet'],
   ['vermietet_gewerbe', 'Gewerblich vermietet'],
   ['sonstige', 'Sonstige Nutzung']
 ];
 
 export function assetIcon(a) {
-  if (a?.art === 'immobilie') return a.nutzung === 'familienheim' ? 'house' : a.nutzung === 'vermietet_gewerbe' ? 'landmark' : 'building-2';
+  if (a?.art === 'immobilie') return a.nutzung === 'familienheim' || a.nutzung === 'selbstgenutzt' ? 'house' : a.nutzung === 'vermietet_gewerbe' ? 'landmark' : 'building-2';
   return (ARTEN.find(([k]) => k === a?.art) || ARTEN[4])[2];
 }
 

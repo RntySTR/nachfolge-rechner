@@ -127,9 +127,11 @@ export function ansichtVermoegen(f) {
     const art = ARTEN.find(([k]) => k === a.art) || ARTEN[4];
     const eig = Object.entries(a.eigentum || {}).filter(([, q]) => q > 0);
     const summe = eig.reduce((s, [, q]) => s + Number(q), 0);
+    const heimId = f.vermoegen.find((x) => x.art === 'immobilie' && x.nutzung === 'familienheim')?.id;
+    const doppelt = a.art === 'immobilie' && a.nutzung === 'familienheim' && a.id !== heimId;
     const nutzung = a.art === 'immobilie' ? (NUTZUNGEN.find(([k]) => k === a.nutzung) || [, ''])[1] : '';
     return `<button type="button" class="asset" data-act="vermoegen-bearbeiten" data-id="${a.id}">
-      <div class="oben"><span class="symbol">${icon(assetIcon(a), 22)}</span><div><div class="bez">${esc(a.bezeichnung || 'Ohne Bezeichnung')}</div><div class="art">${esc(art[1])}${nutzung ? ` · ${esc(nutzung)}` : ''}</div></div></div>
+      <div class="oben"><span class="symbol">${icon(assetIcon(a), 22)}</span><div><div class="bez">${esc(a.bezeichnung || 'Ohne Bezeichnung')}</div><div class="art">${esc(art[1])}${nutzung ? ` · ${esc(nutzung)}` : ''}${doppelt ? ' <span class="ziel-nein">(weiteres Familienheim, ohne Befreiung gerechnet)</span>' : ''}</div></div></div>
       <div class="wert">${euro(vw(a))}<small>${a.steuerwert != null && a.steuerwert !== '' ? `Steuerwert ${euro(a.steuerwert)}` : 'Steuerwert = Verkehrswert (Annahme)'}${Number(a.verbindlichkeit) ? ` · Verbindlichkeit ${euro(a.verbindlichkeit)}` : ''}</small></div>
       <div class="anteile">${eig.map(([p, q]) => `<span style="width:${(q / (summe || 1)) * 100}%;background:${personFarbe(f, p)}"></span>`).join('')}</div>
       <div class="eigner">${eig.length ? eig.map(([p, q]) => `${esc(nameVon(f, p))} ${quote(q)}`).join(' · ') : '<span class="ziel-nein">Kein Eigentümer erfasst</span>'}${Math.abs(summe - 1) > 0.001 && eig.length ? ' <span class="ziel-nein">(Summe ≠ 1)</span>' : ''}</div>

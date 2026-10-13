@@ -241,7 +241,7 @@ function setzeBindung(pfad, wert, optionen = {}) {
     if (/^vermoegen\.\d+\.art$/.test(pfad)) {
       const a = holePfad(f, pfad.replace(/\.art$/, ''));
       if (wert !== 'immobilie') a.nutzung = 'sonstige';
-      else if (!a.nutzung || a.nutzung === 'sonstige') a.nutzung = 'familienheim';
+      else if (!a.nutzung || a.nutzung === 'sonstige') a.nutzung = f.vermoegen.some((x) => x !== a && x.nutzung === 'familienheim') ? 'vermietet_wohnen' : 'familienheim';
     }
   }, optionen);
 }
@@ -278,7 +278,9 @@ const AKTIONEN = {
   'vermoegen-neu': () => aendern((f) => {
     const id = neueId('v');
     const eig = f.geber.b ? { [f.geber.a]: 0.5, [f.geber.b]: 0.5 } : { [f.geber.a]: 1 };
-    f.vermoegen.push({ id, bezeichnung: '', art: 'immobilie', nutzung: 'familienheim', verkehrswert: '', steuerwert: '', jahresertrag: '', verbindlichkeit: '', eigentum: eig });
+    // Nur eine Immobilie kann Familienheim sein; weitere starten als vermietet
+    const nutzung = f.vermoegen.some((x) => x.nutzung === 'familienheim') ? 'vermietet_wohnen' : 'familienheim';
+    f.vermoegen.push({ id, bezeichnung: '', art: 'immobilie', nutzung, verkehrswert: '', steuerwert: '', jahresertrag: '', verbindlichkeit: '', eigentum: eig });
     state.sheet = { typ: 'vermoegen', id };
   }),
   'vermoegen-bearbeiten': (d) => { state.sheet = { typ: 'vermoegen', id: d.id }; render(); },
