@@ -16,6 +16,9 @@ export const state = {
   offenBs: {},
   szReihenfolge: null,
   vorschlaegeOffen: true,
+  aufgeklappt: {},
+  vsOptionen: false,
+  vsDetails: false,
   speicherFehler: false
 };
 
@@ -26,7 +29,8 @@ export function laden() {
       const d = JSON.parse(roh);
       state.faelle = Array.isArray(d.faelle) ? d.faelle.map(migriere) : [];
       state.aktivId = d.aktivId;
-      state.ansicht = d.ansicht || 'familie';
+      // Schritt „Gestaltungsziel“ ist in „Ausgangslage und Ziel“ aufgegangen
+      state.ansicht = d.ansicht === 'ziel' ? 'ausgangslage' : d.ansicht || 'familie';
     }
   } catch (e) {
     state.speicherFehler = true;

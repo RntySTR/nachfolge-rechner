@@ -7,6 +7,8 @@ import {
   feld, quoteEingabe, euroEingabe, personenChips, anteilEditor, aktionsknopf, iconknopf, rolleText
 } from './komponenten.js';
 import { holePfad, state } from './store.js';
+import { kontextFuer, standardJahre } from '../engine/auswertung.js';
+import { prozent } from './format.js';
 
 const nichtGeber = (f) => f.personen.filter((p) => p.rolle !== 'geber');
 const geberSlots = (f) => (f.geber.b ? ['a', 'b'] : ['a']);
@@ -20,6 +22,7 @@ export function sheetInhalt(f, sh) {
     case 'schritt': return sheetSchritt(f, sh.sz, sh.index);
     case 'faelle': return sheetFaelle(f);
     case 'info': return sheetInfo();
+    case 'annahmen': return sheetAnnahmen(f);
     default: return { titel: '', inhalt: '' };
   }
 }
@@ -349,6 +352,32 @@ function sheetFaelle(f) {
     fuss: aktionsknopf('fall-loeschen', 'Diesen Fall löschen', { ico: 'trash-2', cls: 'klein gefahr', daten: { id: f.id } })
   };
   void i;
+}
+
+// ------------------------------------------------------------------ Annahmen zu den Erbfällen
+
+function sheetAnnahmen(f) {
+  const an = f.annahmen || {};
+  const modus = an.todesannahme || 'statistisch';
+  const k = kontextFuer(f);
+  const [g1, g2] = k.geber;
+  const erkl = {
+    statistisch: 'Jeder Vermögensgeber stirbt bei seiner statistischen Lebenserwartung (Sterbetafel 2022/2024). Beide Sterbereihenfolgen werden gerechnet und nach ihrer Wahrscheinlichkeit gewichtet.',
+    sofort: 'Stresstest: Beide Erbfälle treten kurz nach dem letzten Schritt ein. Zeigt, was bei frühem Tod von den Gestaltungen bleibt.',
+    manuell: 'Eigene Annahme: Jahre bis zum Erbfall je Vermögensgeber.'
+  }[modus];
+  return {
+    titel: 'Annahmen zu den Erbfällen',
+    inhalt: `<div class="gruppe">
+      ${segment('annahmen.todesannahme', modus, [['statistisch', 'Statistisch'], ['sofort', 'Stresstest'], ['manuell', 'Eigene Annahme']], { voll: true })}
+      <p class="small muted">${esc(erkl)}</p>
+      ${modus === 'manuell' ? k.geber.map((p) => {
+        const sl = p.id === f.geber.a ? 'a' : 'b';
+        return zahlfeld(`${nameVon(f, p.id)}: Jahre bis zum Erbfall`, `annahmen.jahre.${sl}`, an.jahre?.[sl] ?? standardJahre(f, p), { einheit: 'J.' });
+      }).join('') : ''}
+      ${g2 && modus !== 'manuell' && g1?.geburt && g2?.geburt ? `<p class="small muted">Statistische Wahrscheinlichkeit, dass ${esc(nameVon(f, g1.id))} zuerst stirbt: ${prozent(k.pErster)}.</p>` : ''}
+    </div>`
+  };
 }
 
 function sheetInfo() {

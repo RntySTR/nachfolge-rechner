@@ -3,6 +3,7 @@
 import { esc, zahlText, quoteText, initialen } from './format.js';
 import { icon } from './icons.js';
 import { alter } from '../engine/util.js';
+import { state } from './store.js';
 
 export const ROLLEN = [
   ['kind', 'Kind'],
@@ -161,4 +162,18 @@ export function hinweisBox(h) {
 
 export function seitenkopf({ schritt, titel, lead, aktionen = '' }) {
   return `<header class="kopf"><div class="titel">${schritt ? `<div class="schrittmarke">${esc(schritt)}</div>` : ''}<h1>${esc(titel)}</h1>${lead ? `<p class="lead">${lead}</p>` : ''}</div>${aktionen ? `<div class="aktionen">${aktionen}</div>` : ''}</header>`;
+}
+
+/** Erläuterung (reiner Text) hinter einem Info-Symbol; öffnet beim Antippen, Überfahren oder Fokussieren. */
+export function infoTip(text, { label = 'Erläuterung' } = {}) {
+  return `<span class="info-tip" tabindex="0" role="button" aria-label="${esc(label)}" data-stopp="1">${icon('info', 16)}<span class="info-pop" role="tooltip">${esc(text)}</span></span>`;
+}
+
+/**
+ * Aufklappbarer Abschnitt; der Zustand übersteht das Neuzeichnen (state.aufgeklappt[key]).
+ * summary: HTML der Kopfzeile, inhalt: HTML des Inhalts.
+ */
+export function aufklapp(key, summary, inhalt, { cls = '', offen = false } = {}) {
+  const ist = state.aufgeklappt?.[key] ?? offen;
+  return `<details class="aufklapp ${cls}" data-merken="${esc(key)}"${ist ? ' open' : ''}><summary>${summary}</summary>${inhalt}</details>`;
 }

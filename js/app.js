@@ -1,19 +1,18 @@
 // Einstieg: Navigation, Rendering, Ereignisse.
 
 import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispielLaden, fallDuplizieren, fallLoeschen, exportieren, importieren, personEntfernen, vermoegenEntfernen } from './ui/store.js';
-import { ansichtFamilie, ansichtVermoegen, ansichtAusgangslage, ansichtZiel } from './ui/ansichten.js';
+import { ansichtFamilie, ansichtVermoegen, ansichtAusgangslage } from './ui/ansichten.js';
 import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer } from './ui/ergebnisse.js';
 import { sheetInhalt } from './ui/sheets.js';
 import { mandantenfassung } from './ui/mandant.js';
 import { icon } from './ui/icons.js';
-import { esc, euro, parseZahl, parseQuote, parseDatum, anzahl } from './ui/format.js';
+import { esc, parseZahl, parseQuote, parseDatum, anzahl } from './ui/format.js';
 import { neueId, tiefeKopie, addJahre } from './engine/util.js';
 
 const ANSICHTEN = [
   ['familie', 'Familie', 'users', ansichtFamilie],
   ['vermoegen', 'Vermögen', 'wallet', ansichtVermoegen],
-  ['ausgangslage', 'Ausgangslage', 'scale', ansichtAusgangslage],
-  ['ziel', 'Gestaltungsziel', 'target', ansichtZiel],
+  ['ausgangslage', 'Ausgangslage und Ziel', 'scale', ansichtAusgangslage],
   ['szenarien', 'Szenarien', 'route', ansichtSzenarien],
   ['vergleich', 'Zusammenfassung', 'git-compare-arrows', ansichtVergleich]
 ];
@@ -88,19 +87,32 @@ function schrittNav(idx) {
   </nav>`;
 }
 
+/** Stand je Schritt für die Seitenleiste: vollständig (Häkchen) oder fehlende Angaben (Punkt mit Erläuterung). */
+function schrittStand(f, k) {
+  if (k === 'familie') {
+    const ohne = f.personen.filter((p) => !p.geburt || !p.vorname).length;
+    return ohne ? { fehlt: ohne === 1 ? 'Bei einer Person fehlen Vorname oder Geburtsdatum' : `Bei ${ohne} Personen fehlen Vorname oder Geburtsdatum` } : { ok: f.personen.some((p) => p.rolle !== 'geber') };
+  }
+  if (k === 'vermoegen') {
+    if (!f.vermoegen.length) return {};
+    const offen = f.vermoegen.filter((a) => !(Number(a.verkehrswert) > 0) || Math.abs(Object.values(a.eigentum || {}).reduce((x, y) => x + Number(y || 0), 0) - 1) > 0.001).length;
+    return offen ? { fehlt: 'Verkehrswert oder Eigentum unvollständig' } : { ok: true };
+  }
+  if (k === 'ausgangslage') {
+    const z = f.ziel || {};
+    const hatZiel = z.modus === 'quote' ? Object.values(z.quoten || {}).some((q) => Number(q) > 0) : Object.keys(z.assets || {}).length > 0;
+    return hatZiel && f.stichtag ? { ok: true } : {};
+  }
+  if (k === 'szenarien') return f.szenarien.some((s) => !s.basis) ? { ok: true } : {};
+  return {};
+}
+
 function renderNav(f) {
-  const res = state.ansicht === 'vergleich' || state.ansicht === 'szenarien' ? ergebnisse(f) : null;
   $('#fallwahl').innerHTML = `${icon('folder-open', 20)}<span class="t"><b>${esc(f.titel || 'Ohne Titel')}</b><span>${anzahl(f.personen.length, 'Person', 'Personen', 'f')} · ${anzahl(f.vermoegen.length, 'Wert', 'Werte')}</span></span>${icon('chevron-down', 16)}`;
   $('#navlist').innerHTML = ANSICHTEN.map(([k, t, ico], i) => {
-    let badge = '';
-    if (k === 'familie') badge = f.personen.length;
-    if (k === 'vermoegen') badge = f.vermoegen.length;
-    if (k === 'szenarien') badge = f.szenarien.length;
-    if (k === 'vergleich' && res?.szenarien) {
-      const b = res.szenarien.filter((r) => !r.fehler).sort((x, y) => x.erwartet - y.erwartet)[0];
-      badge = b ? euro(b.erwartet) : '';
-    }
-    return `<li><button type="button" data-nav="${k}" aria-current="${state.ansicht === k ? 'page' : 'false'}"><span class="n">${icon(ico, 18)}</span><span>${i + 1}&nbsp;${t}</span><span class="badge">${esc(badge)}</span></button></li>`;
+    const st = schrittStand(f, k);
+    const marke = st.fehlt ? `<span class="stand fehlt" title="${esc(st.fehlt)}" aria-label="${esc(st.fehlt)}"></span>` : st.ok ? `<span class="stand ok" aria-label="vollständig">${icon('check', 14)}</span>` : '';
+    return `<li><button type="button" data-nav="${k}" aria-current="${state.ansicht === k ? 'page' : 'false'}"><span class="n">${icon(ico, 18)}</span><span>${i + 1}&nbsp;${t}</span>${marke}</button></li>`;
   }).join('');
 }
 
@@ -171,6 +183,12 @@ function wertAusElement(el) {
   return v;
 }
 
+/** Wer die Schritte eines übernommenen Vorschlags ändert, verliert dessen Bausteintexte (sie würden nicht mehr stimmen). */
+function bausteineVeraltet(f, pfad) {
+  const m = String(pfad || '').match(/^szenarien\.(\d+)\.schritte/);
+  if (m && f.szenarien[Number(m[1])]) delete f.szenarien[Number(m[1])].module;
+}
+
 function setzeBindung(pfad, wert, optionen = {}) {
   aendern((f) => {
     if (pfad.startsWith('__fall.')) { setzePfad(f, pfad.slice(7), wert); return; }
@@ -180,6 +198,7 @@ function setzeBindung(pfad, wert, optionen = {}) {
     }
     if (pfad.startsWith('selbstnutzung.')) { f.selbstnutzung[pfad.split('.')[1]] = !!wert; return; }
     setzePfad(f, pfad, wert);
+    bausteineVeraltet(f, pfad);
     // Folgeänderungen
     const m = pfad.match(/^personen\.(\d+)\.rolle$/);
     if (m) {
@@ -273,12 +292,14 @@ const AKTIONEN = {
     aendern((f) => {
       const l = holePfad(f, d.pfad);
       if (Array.isArray(l)) l.splice(Number(d.index), 1);
+      bausteineVeraltet(f, d.pfad);
     });
     if (d.schliessen) { state.sheet = null; render(); }
   },
   'liste-neu': (d) => aendern((f) => {
     let l = holePfad(f, d.pfad);
     if (!Array.isArray(l)) { l = []; setzePfad(f, d.pfad, l); }
+    bausteineVeraltet(f, d.pfad);
     const v = d.vorlage;
     if (v === 'gegenstand') l.push({ assetId: f.vermoegen[0]?.id || '', quote: 1 });
     if (v?.startsWith('gl-')) l.push({ typ: v.slice(3) });
@@ -317,6 +338,7 @@ const AKTIONEN = {
     }
     if (d.typ === 'verzicht') Object.assign(basis, { berechtigter: f.geber.a, assetId: f.vermoegen.find((a) => a.art === 'immobilie')?.id || '', datum: addJahre(f.stichtag, 10.5) });
     sz.schritte.push(basis);
+    delete sz.module;
     state.sheet = { typ: 'schritt', sz: i, index: sz.schritte.length - 1 };
   }),
   'schritt-bearbeiten': (d) => { state.sheet = { typ: 'schritt', sz: Number(d.sz), index: Number(d.index) }; render(); },
@@ -325,11 +347,14 @@ const AKTIONEN = {
     const k = tiefeKopie(sz.schritte[Number(d.index)]);
     k.id = neueId('st');
     sz.schritte.push(k);
+    delete sz.module;
     state.sheet = { typ: 'schritt', sz: Number(d.sz), index: sz.schritte.length - 1 };
   }),
 
   'ereignis-umschalten': (d) => { state.offenSz = state.offenSz || {}; state.offenSz[d.id] = !state.offenSz[d.id]; render(); },
-  'sz-reihenfolge': (d) => { state.szReihenfolge = d.id; render(); },
+  annahmen: () => { state.sheet = { typ: 'annahmen' }; render(); },
+  'vs-optionen': () => { state.vsOptionen = !state.vsOptionen; render(); },
+  'vs-details': () => { state.vsDetails = !state.vsDetails; render(); },
   uebertragbar: (d) => aendern((f) => {
     const nb = f.ziel.nebenbedingungen = f.ziel.nebenbedingungen || {};
     nb.nichtUebertragen = d.art === 'immobilien' ? f.vermoegen.filter((a) => a.art !== 'immobilie').map((a) => a.id) : [];
@@ -355,6 +380,7 @@ const AKTIONEN = {
       sz.id = neueId('sz');
       sz.vorschlagId = x.id;
       sz.name = `Vorschlag: ${x.bausteine.join(', ')}`;
+      sz.module = tiefeKopie(x.module);
       sz.schritte.forEach((st) => (st.id = neueId('st')));
       f.szenarien.push(sz);
       state.szenarioId = sz.id;
@@ -409,6 +435,9 @@ function toast(text) {
 // ------------------------------------------------------------------ Ereignisse
 
 document.addEventListener('click', (e) => {
+  // Info-Symbol: nur Erläuterung zeigen, nichts auslösen (auch nicht das Aufklappen eines Abschnitts)
+  const tip = e.target.closest('.info-tip');
+  if (tip) { e.preventDefault(); tip.focus(); return; }
   const navBtn = e.target.closest('[data-nav]');
   if (navBtn) {
     state.ansicht = navBtn.dataset.nav;
@@ -436,6 +465,7 @@ document.addEventListener('click', (e) => {
       const w = tl.dataset.wert;
       l = l.includes(w) ? l.filter((x) => x !== w) : [...l, w];
       setzePfad(f, pfad, l);
+      bausteineVeraltet(f, pfad);
     });
     return;
   }
@@ -455,6 +485,7 @@ document.addEventListener('click', (e) => {
         if (gleich) { for (const k of Object.keys(o)) o[k] = 1 / n; o[w] = 1 / n; } else o[w] = 0;
       }
       setzePfad(f, pfad, o);
+      bausteineVeraltet(f, pfad);
     });
     return;
   }
@@ -514,6 +545,12 @@ $('#import-datei').addEventListener('change', async (e) => {
   }
   e.target.value = '';
 });
+
+// Aufgeklappte Abschnitte merken, damit sie das Neuzeichnen überstehen
+document.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (d?.dataset?.merken) state.aufgeklappt[d.dataset.merken] = d.open;
+}, true);
 
 window.addEventListener('resize', () => { if (state.ansicht === 'familie') zeichneLinien(); });
 

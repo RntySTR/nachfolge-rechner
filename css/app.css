@@ -653,3 +653,73 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .btn.ist-uebernommen { background: var(--ok-tint, #e3efe6); color: var(--ok, #2f6b45); border: 1px solid transparent; }
 .btn.ist-uebernommen:hover { background: transparent; border-color: var(--border); color: var(--text); }
 .bs-aktion .btn { white-space: normal; line-height: 1.25; padding: 9px 14px; text-align: center; }
+
+/* ---------------------------------------------------------------- Vereinfachung: Info-Symbol, Aufklappen */
+.mit-info { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.info-tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; color: var(--muted); cursor: help; vertical-align: middle; flex: none; }
+.info-tip:hover, .info-tip:focus-visible, .info-tip:focus { color: var(--brand); outline: none; background: var(--brand-tint); }
+.info-pop {
+  position: absolute; z-index: 30; left: 50%; top: calc(100% + 8px); transform: translateX(-50%);
+  width: max-content; max-width: min(340px, 80vw); padding: 10px 12px; border-radius: 8px;
+  background: var(--ink); color: #fff; font: 400 13px/1.45 var(--font-text); text-align: left; text-transform: none; letter-spacing: 0;
+  box-shadow: var(--shadow-pop); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .12s;
+}
+.info-tip:hover .info-pop, .info-tip:focus .info-pop, .info-tip:focus-within .info-pop { opacity: 1; visibility: visible; }
+@media (max-width: 600px) { .info-pop { left: auto; right: -8px; transform: none; } }
+
+details.aufklapp > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+details.aufklapp > summary::-webkit-details-marker { display: none; }
+details.aufklapp > summary::before { content: ''; width: 8px; height: 8px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; margin-right: 4px; flex: none; }
+details.aufklapp[open] > summary::before { transform: rotate(45deg); }
+details.aufklapp > summary h2, details.aufklapp > summary h3 { margin: 0; }
+details.aufklapp[open] > summary { margin-bottom: 16px; }
+.abschnitt-kopf { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.abschnitt-kopf h2 { margin: 0; }
+
+/* Seitenleiste: Stand je Schritt */
+.navlist .stand { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; }
+.navlist .stand.ok { color: var(--success); }
+.navlist .stand.fehlt::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+@media (max-width: 860px) { .navlist .stand { display: none; } }
+
+/* Annahmen in einer Zeile */
+.annahme-zeile { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -12px 0 20px; font-size: 13px; color: var(--muted); }
+.annahme-zeile b { font-weight: 500; color: var(--ink); }
+.annahme-zeile .btn { min-height: 30px; padding: 0 10px; }
+
+/* Ausgangslage als Zeile */
+.basis-block { background: var(--surface-warm); padding: 14px 18px; margin-bottom: 32px; }
+.basis-block > summary { gap: 12px; }
+details.basis-block[open] > summary { margin-bottom: 0; }
+.basis-zeile { display: flex; flex: 1; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
+.basis-zeile .bz-t { display: inline-flex; align-items: center; gap: 6px; font: 500 16px/1.2 var(--font-display); color: var(--ink); }
+.basis-zeile .bz-w { font: 500 22px/1.1 var(--font-display); color: var(--ink); }
+.basis-zeile .bz-z { font-size: 13px; }
+.basis-zeile .bz-a { margin-left: auto; font: 500 13px/1 var(--font-display); color: var(--brand); }
+details.basis-block[open] .bz-a { visibility: hidden; }
+
+/* Vorschläge */
+.vs-knoepfe { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.vs-knoepfe .btn[aria-expanded="true"] { background: var(--brand-tint); color: var(--ink); }
+.bs-hinweise-wrap { margin-top: 10px; }
+.bs-hinweise-wrap > summary { font: 500 13px/1.3 var(--font-display); color: var(--brand); }
+details.bs-hinweise-wrap[open] > summary { margin-bottom: 6px; }
+.bs-hinweise { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; line-height: 1.5; color: var(--muted); max-width: 760px; }
+
+/* Bausteine eines übernommenen Vorschlags */
+.bs-liste { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+.bs-karte { background: var(--surface); padding: 12px 14px; }
+.bs-karte .bs-kurz { margin: 4px 0 0 22px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bs-karte .bs-text-inhalt { margin: 8px 0 0 22px; }
+.bs-karte .bs-text-inhalt ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+
+.kachel-titel { margin-bottom: 8px; }
+.belastung.ohne-kopf { padding: 0; background: transparent; }
+.sz-ablauf > summary { flex-wrap: wrap; }
+.sz-ablauf > summary .small { margin-left: 4px; }
+/* Bausteintexte bleiben in der sichtbaren Breite, auch wenn die Matrix seitlich scrollt */
+.bs-text td > * { position: sticky; left: 36px; max-width: min(760px, calc(100vw - 72px)); }
+@media (max-width: 600px) { .bs-text td { padding-left: 12px; } .bs-text td > * { left: 12px; max-width: calc(100vw - 56px); } }
+.raster > .flaeche + .flaeche { margin-top: 0; }
+.raster > .flaeche.raster { align-content: start; }
+@media print { .info-tip, .vs-knoepfe, .annahme-zeile .btn { display: none !important; } }

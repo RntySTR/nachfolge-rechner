@@ -1,10 +1,10 @@
-// Ansichten 1–4: Familie, Vermögen, Ausgangslage, Ziel.
+// Ansichten 1–3: Familie, Vermögen, Ausgangslage und Gestaltungsziel.
 
 import { esc, euro, quote, datum, zahlText } from './format.js';
 import { icon } from './icons.js';
 import {
   ARTEN, NUTZUNGEN, assetIcon, avatar, nameVon, rolleText, alterText, personFarbe, seitenkopf, segment, schalter,
-  eurofeld, datumfeld, aktionsknopf, quoteEingabe, feld, textfeld
+  eurofeld, datumfeld, aktionsknopf, quoteEingabe, feld, textfeld, infoTip, aufklapp
 } from './komponenten.js';
 import { steuerklasse } from '../engine/personen.js';
 import { beschreibeVerfuegung } from '../engine/plan.js';
@@ -70,8 +70,7 @@ export function ansichtFamilie(f) {
 
   const andere = `
     <section class="abschnitt">
-      <h2>Weitere Personen</h2>
-      <p class="muted">Eltern, Geschwister, Lebensgefährten oder andere Personen, die etwas erhalten sollen.</p>
+      <h2 class="mit-info" style="margin-bottom:14px">Weitere Personen ${infoTip('Eltern, Geschwister, Lebensgefährten oder andere Personen, die etwas erhalten sollen.')}</h2>
       <div class="chips">
         ${weitere.map((p) => `<button type="button" class="chip" data-act="person-bearbeiten" data-id="${p.id}">${avatar(f, p.id)}${esc(nameVon(f, p.id))} · ${esc(rolleText(p, f))}</button>`).join('')}
         <button type="button" class="chip ohneavatar" data-act="person-neu" data-rolle="sonstige">${icon('plus', 16)} Person hinzufügen</button>
@@ -81,10 +80,7 @@ export function ansichtFamilie(f) {
   const empfaenger = f.personen.filter((p) => p.rolle !== 'geber');
   const geber = [A, B].filter(Boolean);
   const fbTabelle = empfaenger.length ? `
-    <section class="abschnitt">
-      <h2>Steuerklassen und Freibeträge</h2>
-      <p class="muted">Freibeträge alle zehn Jahre je Schenker. Bei Erwerben von Todes wegen kommen Versorgungsfreibeträge hinzu.</p>
-      <div class="tabellen-wrap"><table class="tabelle">
+    ${aufklapp('freibetraege', `<h2>Steuerklassen und Freibeträge</h2>${infoTip('Freibeträge alle zehn Jahre je Schenker. Bei Erwerben von Todes wegen kommen Versorgungsfreibeträge hinzu.')}`, `<div class="tabellen-wrap"><table class="tabelle">
         <thead><tr><th>Person</th>${geber.map((g) => `<th>von ${esc(nameVon(f, g.id))}</th><th class="r">Freibetrag</th>`).join('')}</tr></thead>
         <tbody>${empfaenger.map((p) => `<tr class="klickbar" data-act="person-bearbeiten" data-id="${p.id}"><td>${esc(nameVon(f, p.id))}<div class="unter">${esc(alterText(p, f.stichtag))}</div></td>${geber.map((g) => {
           const k = steuerklasse(f, g.id, p.id, 'schenkung');
@@ -92,12 +88,12 @@ export function ansichtFamilie(f) {
           return `<td>${esc(k.beziehung)}<div class="unter">Steuerklasse ${k.stkl}${kt.stkl !== k.stkl ? ` (Erbfall ${kt.stkl})` : ''}</div></td><td class="r num">${euro(k.freibetrag)}${kt.freibetrag !== k.freibetrag ? `<div class="unter">Erbfall ${euro(kt.freibetrag)}</div>` : ''}</td>`;
         }).join('')}</tr>`).join('')}</tbody>
       </table></div>
-    </section>` : '';
+`, { cls: 'abschnitt' })}` : '';
 
   const fehlt = f.personen.filter((p) => !p.geburt).length;
   return `
     ${seitenkopf({
-      schritt: 'Schritt 1 von 6',
+      schritt: 'Schritt 1 von 5',
       titel: 'Familie',
       lead: 'Wer gibt Vermögen weiter und wer soll es erhalten? Für jede Person genügen Vorname, Geburtsdatum und Geschlecht.',
       aktionen: segment('__ehepaar', f.geber.b ? 'ja' : 'nein', [['ja', 'Ehepaar'], ['nein', 'Einzelperson']])
@@ -141,7 +137,7 @@ export function ansichtVermoegen(f) {
   }).join('');
 
   return `
-    ${seitenkopf({ schritt: 'Schritt 2 von 6', titel: 'Vermögen', lead: 'Vermögenswerte mit Verkehrswert, Steuerwert und Eigentumsverhältnissen. Gemeinsames Eigentum wird als Anteil je Person erfasst.' })}
+    ${seitenkopf({ schritt: 'Schritt 2 von 5', titel: 'Vermögen', lead: 'Vermögenswerte mit Verkehrswert, Steuerwert und Eigentumsverhältnissen. Gemeinsames Eigentum wird als Anteil je Person erfasst.' })}
     ${f.vermoegen.length ? kopf : ''}
     <div class="assets">${karten}<button type="button" class="asset neu" data-act="vermoegen-neu">${icon('plus', 24)}Vermögenswert hinzufügen</button></div>`;
 }
@@ -159,7 +155,7 @@ export function ansichtAusgangslage(f) {
     </button>`;
   };
   return `
-    ${seitenkopf({ schritt: 'Schritt 3 von 6', titel: 'Ausgangslage', lead: 'Güterstand, bestehende Testamente und frühere Schenkungen. Daraus ergibt sich das Szenario „Ohne Gestaltung“.' })}
+    ${seitenkopf({ schritt: 'Schritt 3 von 5', titel: 'Ausgangslage und Ziel', lead: 'Güterstand, bestehende Testamente und frühere Schenkungen ergeben das Szenario „Ohne Gestaltung“. Darunter steht, bei wem das Vermögen am Ende liegen soll.' })}
     <div class="raster zwei">
       <div class="flaeche raster">
         <h3>Stichtag und Güterstand</h3>
@@ -168,8 +164,7 @@ export function ansichtAusgangslage(f) {
         ${ehepaar ? datumfeld('Datum der Eheschließung', 'heirat', f.heirat) : ''}
       </div>
       ${ehepaar ? `<div class="flaeche raster">
-        <h3>Zugewinn</h3>
-        <p class="small muted">Anfangsvermögen bei Eheschließung einschließlich späterer Erbschaften und Schenkungen (§ 1374 Abs. 2 BGB), nach der Rechtsprechung um den Kaufkraftverlust bereinigt. Ohne Angabe wird § 5 Abs. 1 ErbStG im Erbfall nicht angesetzt; bei der Güterstandsschaukel gilt 0 €, der Ausgleich fällt dann eher zu hoch aus.</p>
+        <h3 class="mit-info">Zugewinn ${infoTip('Anfangsvermögen bei Eheschließung einschließlich späterer Erbschaften und Schenkungen (§ 1374 Abs. 2 BGB), nach der Rechtsprechung um den Kaufkraftverlust bereinigt. Ohne Angabe wird § 5 Abs. 1 ErbStG im Erbfall nicht angesetzt; bei der Güterstandsschaukel gilt 0 €, der Ausgleich fällt dann eher zu hoch aus.')}</h3>
         <div class="raster zwei">
           ${eurofeld(`Anfangsvermögen ${nameVon(f, f.geber.a)}`, 'anfangsvermoegen.a', f.anfangsvermoegen?.a)}
           ${eurofeld(`Anfangsvermögen ${nameVon(f, f.geber.b)}`, 'anfangsvermoegen.b', f.anfangsvermoegen?.b)}
@@ -178,24 +173,23 @@ export function ansichtAusgangslage(f) {
     </div>
 
     <section class="abschnitt">
-      <h2>Bestehende Verfügungen von Todes wegen</h2>
-      <p class="muted">Gilt für das Szenario „Ohne Gestaltung“ und als Ausgangspunkt jedes weiteren Szenarios.</p>
+      <h2 class="mit-info">Bestehende Verfügungen von Todes wegen ${infoTip('Gilt für das Szenario „Ohne Gestaltung“ und als Ausgangspunkt jedes weiteren Szenarios.')}</h2>
       <div class="raster ${ehepaar ? 'zwei' : ''}">${geber.map(vf).join('')}</div>
     </section>
 
     <section class="abschnitt">
-      <h2>Frühere Schenkungen</h2>
-      <p class="muted">Schenkungen der letzten zehn Jahre werden nach § 14 ErbStG mit späteren Erwerben zusammengerechnet.</p>
+      <h2 class="mit-info">Frühere Schenkungen ${infoTip('Schenkungen der letzten zehn Jahre werden nach § 14 ErbStG mit späteren Erwerben zusammengerechnet.')}</h2>
       ${f.vorschenkungen.length ? `<div class="tabellen-wrap"><table class="tabelle"><thead><tr><th>Datum</th><th>Von</th><th>An</th><th>Gegenstand</th><th class="r">Wert</th><th class="r">Gezahlte Steuer</th></tr></thead><tbody>
         ${f.vorschenkungen.map((v, i) => `<tr class="klickbar" data-act="vorschenkung-bearbeiten" data-index="${i}"><td class="num">${datum(v.datum)}</td><td>${esc(nameVon(f, v.von))}</td><td>${esc(nameVon(f, v.an))}</td><td>${esc(v.text || '')}</td><td class="r num">${euro(v.wert)}</td><td class="r num">${euro(v.steuer || 0)}</td></tr>`).join('')}
       </tbody></table></div>` : ''}
       <div style="margin-top:14px">${aktionsknopf('vorschenkung-neu', 'Frühere Schenkung erfassen', { ico: 'plus' })}</div>
-    </section>`;
+    </section>
+    ${zielTeil(f)}`;
 }
 
-// ------------------------------------------------------------------ 4 Ziel
+// ------------------------------------------------------------------ Gestaltungsziel (Teil von Schritt 3)
 
-export function ansichtZiel(f) {
+function zielTeil(f) {
   const empfaenger = f.personen.filter((p) => p.rolle !== 'geber');
   const z = f.ziel;
   const nb = z.nebenbedingungen || {};
@@ -220,14 +214,15 @@ export function ansichtZiel(f) {
         </div>
         ${ids.length > 1 ? `<div class="gruppe">${ids.map((id) => `<div class="anteilzeile">${avatar(f, id)}<span>${esc(nameVon(f, id))}</span>${quoteEingabe(`ziel.assets.${a.id}.${id}`, soll[id])}</div>`).join('')}</div>` : ''}
       </div>`;
-    }).join('') : `<div class="leer"><h3>Noch keine Vermögenswerte</h3><p>Erfassen Sie zuerst das Vermögen, dann die gewünschte Verteilung.</p>${aktionsknopf('nav', 'Zum Vermögen', { daten: { ziel: 'vermoegen' } })}</div>`;
+    }).join('') : `<div class="leer"><h3>Noch keine Vermögenswerte</h3><p>Zuerst das Vermögen erfassen, dann die gewünschte Verteilung.</p>${aktionsknopf('nav', 'Zum Vermögen', { daten: { ziel: 'vermoegen' } })}</div>`;
   }
   return `
-    ${seitenkopf({ schritt: 'Schritt 4 von 6', titel: 'Gestaltungsziel', lead: 'Bei wem soll das Vermögen am Ende liegen? Die Zusammenfassung prüft für jedes Szenario, ob dieses Ziel erreicht wird.', aktionen: segment('ziel.modus', z.modus || 'asset', [['asset', 'Je Vermögenswert'], ['quote', 'Nach Quoten']]) })}
-    <div class="raster" style="gap:16px">${inhalt}</div>
+    <section class="abschnitt" id="gestaltungsziel">
+      <div class="abschnitt-kopf"><h2 class="mit-info">Gestaltungsziel ${infoTip('Bei wem soll das Vermögen am Ende liegen? Die Zusammenfassung prüft für jedes Szenario, ob dieses Ziel erreicht wird.')}</h2>${segment('ziel.modus', z.modus || 'asset', [['asset', 'Je Vermögenswert'], ['quote', 'Nach Quoten']])}</div>
+      <div class="raster" style="gap:16px">${inhalt}</div>
+    </section>
     <section class="abschnitt">
-      <h2>Rahmenbedingungen</h2>
-      <p class="muted">Steuern die Vorschläge des Rechners und die Hinweise.</p>
+      <h2 class="mit-info">Rahmenbedingungen ${infoTip('Steuern die Vorschläge des Rechners und die Hinweise.')}</h2>
       <div class="flaeche raster">
         ${f.geber.b ? schalter('ziel.nebenbedingungen.laengerlebenderAbgesichert', nb.laengerlebenderAbgesichert, 'Der Längerlebende muss abgesichert bleiben', 'Vorschläge begrenzen Vermächtnisse beim ersten Erbfall auf die Hälfte des Nachlasses, geben ihm den Folgenießbrauch und verzichten auf die Ausschlagung; Warnung bei Überschreitung.') : ''}
         ${schalter('ziel.nebenbedingungen.enkelEinbeziehen', nb.enkelEinbeziehen, 'Enkel dürfen einbezogen werden', 'Erlaubt Gestaltungen über die Enkelfreibeträge.')}
