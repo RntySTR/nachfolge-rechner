@@ -7,8 +7,8 @@ const SCHRITTE_LISTE = [
   ['users', 'Familie', 'Vermögensgeber, Kinder und Enkel erfassen.'],
   ['wallet', 'Vermögen', 'Immobilien, Depots und Geld mit Verkehrswert und Eigentumsanteilen.'],
   ['scale', 'Ausgangslage und Ziel', 'Bestehende Verfügungen, frühere Schenkungen und das Gestaltungsziel: wer soll was erhalten.'],
-  ['route', 'Szenarien', 'Vorschläge des Rechners prüfen und eigene Szenarien anlegen.'],
-  ['git-compare-arrows', 'Zusammenfassung', 'Szenarien mit der Ausgangslage vergleichen und ausdrucken.']
+  ['route', 'Szenarien', 'Vorschläge prüfen, eigene Szenarien anlegen und deren Schritte bearbeiten.'],
+  ['git-compare-arrows', 'Zusammenfassung', 'Szenarien mit der Ausgangslage vergleichen, Steuer und Kosten je Ereignis einsehen, ausdrucken.']
 ];
 
 /** Seiten des Tutorials. `inhalt` ist fertiges HTML aus festen Texten. */
@@ -57,6 +57,7 @@ const SEITEN = [
     inhalt: () => `
       <ul class="tut-liste">
         <li>Die Zusammenfassung stellt jedes Szenario der Ausgangslage „Ohne Gestaltung“ gegenüber: Steuern und Kosten, gewichtet über beide Sterbereihenfolgen.</li>
+        <li>Dort stehen auch Ablauf, Freibeträge, Steuer und Kosten je Ereignis. Im Schritt „Szenarien“ werden nur die Schritte bearbeitet; „Steuerdetails ansehen“ springt zur Zusammenfassung.</li>
         <li>Die Mandantenfassung (PDF/Druck) passt auf eine Seite.</li>
         <li>Nicht abgebildet: Betriebsvermögen (§§ 13a–13c ErbStG), Familiengesellschaften, Auslandsbezug, Vor- und Nacherbschaft, Einkommensteuer.</li>
         <li>Spätere Gesetzesänderungen, auch infolge anhängiger Verfahren vor dem Bundesverfassungsgericht, sind nicht berücksichtigt.</li>

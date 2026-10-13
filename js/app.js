@@ -419,6 +419,8 @@ const AKTIONEN = {
     toast('Vorschlag als Szenario übernommen');
   },
   'detail-waehlen': (d) => { state.detail.szenarioId = d.id; render(); },
+  'details-ansehen': (d) => { state.detail.szenarioId = d.id; state.detail.tab = 'zeitachse'; state.ansicht = 'vergleich'; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
+  'szenario-bearbeiten': (d) => { state.szenarioId = d.id; state.ansicht = 'szenarien'; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
   reihenfolge: (d) => { state.detail.reihenfolge = d.id; render(); },
   tab: (d) => { state.detail.tab = d.id; render(); },
   'erwerb-umschalten': (d) => { state.detail.offen[d.id] = !state.detail.offen[d.id]; render(); },
