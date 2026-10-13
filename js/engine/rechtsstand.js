@@ -65,6 +65,8 @@ export const RECHTSSTAND = {
   standardRendite: 0.03,
 
   // GNotKG
+  // Offen: Festgebühren und Tabelle B sind noch nicht gegen das KostBRÄG 2025 (BGBl. 2025 I Nr. 109, in Kraft 1.6.2025)
+  // abgeglichen. Die Werte stammen aus dem Kostenmodul des Kanzleisystems.
   gnotkg: {
     ust: 0.19,
     ztr: 12.5,                  // Registrierung ZTR je Erblasser (durchlaufender Posten)

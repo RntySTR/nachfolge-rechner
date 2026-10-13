@@ -330,7 +330,7 @@ export function ansichtVergleich(f) {
   const kopf = seitenkopf({
     schritt: 'Schritt 6 von 6', titel: 'Vergleich',
     lead: 'Erbschaft- und Schenkungsteuer sowie Notar- und Grundbuchkosten je Szenario, über beide Sterbereihenfolgen gewichtet.',
-    aktionen: `${aktionsknopf('drucken', 'Drucken', { ico: 'printer' })}`
+    aktionen: `${aktionsknopf('drucken-mandant', 'Mandantenfassung (PDF/Druck)', { ico: 'printer', cls: 'primary' })}${aktionsknopf('drucken', 'Interne Ansicht drucken', { ico: 'printer' })}`
   });
   if (res.fehlt) return `${kopf}${fehltBox(res.fehlt)}`;
 

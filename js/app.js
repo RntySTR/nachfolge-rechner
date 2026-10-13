@@ -4,6 +4,7 @@ import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispiel
 import { ansichtFamilie, ansichtVermoegen, ansichtAusgangslage, ansichtZiel } from './ui/ansichten.js';
 import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer } from './ui/ergebnisse.js';
 import { sheetInhalt } from './ui/sheets.js';
+import { mandantenfassung } from './ui/mandant.js';
 import { icon } from './ui/icons.js';
 import { esc, euro, parseZahl, parseQuote, parseDatum } from './ui/format.js';
 import { neueId, tiefeKopie, addJahre } from './engine/util.js';
@@ -353,7 +354,16 @@ const AKTIONEN = {
   reihenfolge: (d) => { state.detail.reihenfolge = d.id; render(); },
   tab: (d) => { state.detail.tab = d.id; render(); },
   'erwerb-umschalten': (d) => { state.detail.offen[d.id] = !state.detail.offen[d.id]; render(); },
-  drucken: () => window.print(),
+  drucken: () => { druckZuruecksetzen(); window.print(); },
+  'drucken-mandant': () => {
+    const f = fall();
+    const res = ergebnisse(f);
+    if (res.fehlt) { toast('Für die Mandantenfassung fehlen Angaben'); return; }
+    $('#druck').innerHTML = mandantenfassung(f, res);
+    document.body.classList.add('druck-mandant');
+    window.addEventListener('afterprint', druckZuruecksetzen, { once: true });
+    window.print();
+  },
 
   'fall-oeffnen': (d) => { state.aktivId = d.id; state.sheet = null; speichern(); render(); },
   'fall-neu': (d) => { neuerFall({ ehepaar: d.ehepaar === '1' }); state.sheet = null; render(); },
@@ -366,6 +376,11 @@ const AKTIONEN = {
     fallLoeschen(d.id); state.sheet = null; render();
   }
 };
+
+function druckZuruecksetzen() {
+  document.body.classList.remove('druck-mandant');
+  $('#druck').innerHTML = '';
+}
 
 function confirmen(text) {
   return window.confirm(text);

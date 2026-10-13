@@ -1,5 +1,5 @@
 // Überschlägige Notar- und Gerichtskosten nach GNotKG (Tabelle B).
-// Die Gebührentabelle ist gegen das Kostenmodul des Kanzleisystems geprüft (siehe tests/kosten.test.js).
+// Die Gebührentabelle ist gegen das Kostenmodul des Kanzleisystems geprüft (siehe tests/kern.test.mjs).
 
 import { RECHTSSTAND as R } from './rechtsstand.js';
 import { cent, summe } from './util.js';

@@ -526,6 +526,45 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   body { font-size: 11pt; }
 }
 
+/* Mandantenfassung: auf dem Bildschirm unsichtbar, im Druck anstelle der App */
+.druckfassung { display: none; }
+@page { size: A4; margin: 18mm 16mm 18mm; }
+@media print {
+  body.druck-mandant .app, body.druck-mandant .sheet, body.druck-mandant .sheet-hg, body.druck-mandant .toast { display: none !important; }
+  body.druck-mandant .druckfassung { display: block; }
+  body.druck-mandant { font-size: 10.5pt; line-height: 1.5; color: #1b2328; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.dr h1 { font-size: 26pt; margin: 4px 0 6px; }
+.dr h2 { font-size: 14pt; margin: 0 0 8px; break-after: avoid; }
+.dr h3 { font-size: 11pt; margin: 14px 0 6px; break-after: avoid; }
+.dr-marke { font: 600 8.5pt/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--brand); }
+.dr-kopf { padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+.dr-klein { font-size: 9pt; color: var(--muted); margin-top: 4px; }
+.dr-lead { margin-bottom: 8px; }
+.dr-personen { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 12px 0 0; font-size: 10pt; }
+.dr-personen dt { color: var(--muted); }
+.dr-personen dd { margin: 0; }
+.dr-block { margin-bottom: 20px; }
+.dr-sz { break-inside: auto; padding-top: 4px; }
+.dr-tab { width: 100%; border-collapse: collapse; font-size: 10pt; }
+.dr-tab th { text-align: left; font-weight: 500; color: var(--muted); font-size: 9pt; border-bottom: 1px solid var(--border); padding: 4px 8px 4px 0; }
+.dr-tab td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.dr-tab { break-inside: avoid; }
+.dr-tab th.r, .dr-tab td.r { text-align: right; padding-left: 16px; padding-right: 0; font-variant-numeric: tabular-nums; }
+.dr-tab td.r { white-space: nowrap; }
+.dr-lead, .dr h3 + .dr-klein { break-after: avoid; }
+.dr-tab tr { break-inside: avoid; }
+.dr-tab tr.summe td { font-weight: 600; color: var(--ink); border-bottom: 0; border-top: 1px solid var(--border); }
+.dr-tab tr.beste td { background: var(--brand-tint); font-weight: 500; color: var(--ink); }
+.dr-ablauf { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.dr-ablauf li { display: grid; grid-template-columns: 24mm 1fr; gap: 10px; break-inside: avoid; }
+.dr-datum { font: 500 9.5pt/1.5 var(--font-display); color: var(--brand); }
+.dr-ablauf p { margin: 2px 0 0; }
+.dr-annahmen ul { margin: 0; padding-left: 18px; font-size: 9.5pt; color: var(--muted); }
+.dr-annahmen li + li { margin-top: 3px; }
+.dr-impressum { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 9pt; color: var(--muted); }
+.dr-impressum b { font-weight: 500; color: var(--text); }
+
 /* Belastung nach Herkunft */
 .belastung { background: var(--surface-warm); padding: 20px 22px; }
 .bl-kopf { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
