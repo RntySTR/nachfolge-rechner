@@ -155,13 +155,30 @@ function kapitalwertRecht(st, r, datum) {
 
 // ---------------------------------------------------------------- Befreiungen je Position
 
+/**
+ * Das Familienheim im Sinne von § 13 Abs. 1 Nr. 4a bis 4c ErbStG ist die eine Wohnung, in der die Familie
+ * ihren Lebensmittelpunkt hat. Sind mehrere Immobilien als Familienheim erfasst, gilt nur die erste;
+ * die übrigen werden wie selbst genutzte Immobilien ohne Befreiung behandelt (Zweit- und Ferienwohnungen
+ * sind nicht begünstigt).
+ */
+export function familienheimId(fall) {
+  return (fall.vermoegen || []).find((a) => istImmobilie(a) && a.nutzung === 'familienheim')?.id || null;
+}
+
+export function istFamilienheim(fall, asset) {
+  return !!asset && asset.id === familienheimId(fall);
+}
+
 function position(st, { asset, quote, an, von, datum, erbfall, text, mitRechten = true, quelleTragender }) {
   const wert = sw(asset) * quote;
   const pos = { text: text || asset.bezeichnung, assetId: asset.id, quote, steuerwert: wert, verkehrswert: vw(asset) * quote, befreiungen: [], lasten: [] };
   const ehe = ehegatte(st.fall, von) === an;
   let befreitQuote = 0;
 
-  if (istImmobilie(asset) && asset.nutzung === 'familienheim') {
+  if (istImmobilie(asset) && asset.nutzung === 'familienheim' && !istFamilienheim(st.fall, asset)) {
+    hinweis(st, 'info', 'Nur ein Familienheim', `„${asset.bezeichnung || 'Immobilie'}“ ist als Familienheim erfasst, ebenso „${st.fall.vermoegen.find((a) => a.id === familienheimId(st.fall))?.bezeichnung || 'eine andere Immobilie'}“. Befreit ist nur die Wohnung mit dem Lebensmittelpunkt der Familie; „${asset.bezeichnung || 'Immobilie'}“ wird ohne Befreiung gerechnet.`, { norm: '§ 13 Abs. 1 Nr. 4a–4c ErbStG' });
+  }
+  if (istFamilienheim(st.fall, asset)) {
     if (ehe && !erbfall) {
       befreitQuote = 1;
       pos.befreiungen.push({ norm: '§ 13 Abs. 1 Nr. 4a ErbStG', text: 'Familienheim an Ehegatten', betrag: wert });

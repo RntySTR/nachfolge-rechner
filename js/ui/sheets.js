@@ -97,6 +97,7 @@ function sheetVermoegen(f, id) {
     </div>
     ${immo ? `<div class="gruppe"><div class="gt">Nutzung</div>
       <div class="chips">${NUTZUNGEN.map(([k, t]) => `<button type="button" class="chip ohneavatar" data-set="${pf}.nutzung" data-wert="${k}" aria-pressed="${a.nutzung === k}">${esc(t)}</button>`).join('')}</div>
+      ${a.nutzung === 'familienheim' && f.vermoegen.find((x) => x.art === 'immobilie' && x.nutzung === 'familienheim')?.id !== a.id ? `<p class="small muted">Bereits „${esc(f.vermoegen.find((x) => x.art === 'immobilie' && x.nutzung === 'familienheim').bezeichnung || 'eine andere Immobilie')}“ ist als Familienheim erfasst. Steuerfrei nach § 13 Abs. 1 Nr. 4a–4c ErbStG ist nur die Wohnung mit dem Lebensmittelpunkt der Familie; diese Immobilie wird ohne Befreiung gerechnet. Bitte die tatsächliche Nutzung wählen.</p>` : ''}
       ${a.nutzung === 'familienheim' ? zahlfeld('Wohnfläche', `${pf}.wohnflaeche`, a.wohnflaeche, { einheit: 'm²', hilfe: 'Für Kinder ist das Familienheim im Erbfall nur bis 200 m² befreit.' }) : ''}
     </div>` : ''}
     <div class="gruppe"><div class="gt">Werte</div>

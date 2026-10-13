@@ -1,9 +1,10 @@
 // Vorschläge zur Steueroptimierung: Strategiebausteine erzeugen, kombinieren, rechnen und ordnen.
-// Der Rechner sucht nicht frei, sondern bewertet eine feste Liste üblicher Gestaltungen,
-// die zur Konstellation passen, und optimiert innerhalb der Bausteine nur Quoten und Zeitpunkte.
+// Die Bausteine sind übliche Gestaltungen, die zur Konstellation passen. Kombiniert wird stufenweise
+// (Vorstufe unter Ehegatten → Übertragungen an Kinder → Verfügung von Todes wegen → Enkel → Option im Erbfall);
+// innerhalb der Bausteine optimiert der Rechner Quoten und Zeitpunkte.
 
 import { bewerteSzenario, kontextFuer, zielStatus } from './auswertung.js';
-import { simuliere, fmtEuro, fmtQuote } from './plan.js';
+import { simuliere, fmtEuro, fmtQuote, istFamilienheim } from './plan.js';
 import { ehegatte, personMap, steuerklasse, name } from './personen.js';
 import { lebenserwartung, jahreswertNutzung, kapitalwertLebenslang } from './bewertung.js';
 import { addJahre, alter, innerhalbJahre, neueId, summe, tiefeKopie } from './util.js';
@@ -180,9 +181,12 @@ export function uebertragbar(fall, a) {
   return !(fall.ziel?.nebenbedingungen?.nichtUebertragen || []).includes(a.id);
 }
 
-/** Für eine Schenkung zu Lebzeiten geeignet: vermietete oder sonstige Immobilie (nicht Familienheim), Depot. */
+/**
+ * Für eine Schenkung unter Nießbrauch geeignet: jede Immobilie außer dem Familienheim (eigener Baustein „H“)
+ * und Depots. Weitere als Familienheim erfasste Immobilien sind steuerlich keine Familienheime und gehören dazu.
+ */
 function istSchenkungsgut(fall, a) {
-  return uebertragbar(fall, a) && ((a.art === 'immobilie' && a.nutzung !== 'familienheim') || a.art === 'depot');
+  return uebertragbar(fall, a) && ((a.art === 'immobilie' && !istFamilienheim(fall, a)) || a.art === 'depot');
 }
 
 function schenkungsKandidaten(fall) {
@@ -198,7 +202,9 @@ function schenkungsKandidaten(fall) {
       const aus = a._ausgleich?.[g];
       const teile = aus ? [[aus.quote, aus.von], [qGesamt - aus.quote, null]] : [[qGesamt, null]];
       for (const [q, vorbehalt] of teile) {
-        if (q <= 1e-6 || vw(a) * q < 100000) continue;
+        // Kleinstanteile auslassen – außer nach einem Vermögensausgleich: dann gehen beide Teile über,
+        // sonst trüge der weitergegebene Teil anteilig den Nießbrauch des Ehegatten und den eigenen zugleich
+        if (q <= 1e-6 || (!aus && vw(a) * q < 100000)) continue;
         // Bruchteile desselben Eigentümers verschmelzen: hat er im Ausgleich einen Anteil erhalten,
         // gibt er auch seinen bisherigen Anteil erst mit Abstand weiter (Kettenschenkung)
         res.push({ g, a, q, empf: normiere(empf), vorbehalt, spaet: !!aus });
@@ -315,7 +321,7 @@ function bausteinFamilienheim(fall) {
   if (!b) return null;
   const reich = nettoVon(fall, a) >= nettoVon(fall, b) ? a : b;
   const arm = reich === a ? b : a;
-  const heime = fall.vermoegen.filter((v) => v.art === 'immobilie' && v.nutzung === 'familienheim' && Number(v.eigentum?.[reich] || 0) > 0 && uebertragbar(fall, v));
+  const heime = fall.vermoegen.filter((v) => istFamilienheim(fall, v) && Number(v.eigentum?.[reich] || 0) > 0 && uebertragbar(fall, v));
   if (!heime.length) return null;
   return {
     key: 'F',
@@ -347,7 +353,7 @@ function ausgleichVarianten(fall, d) {
   const xArm = tWert(arm);
   const quellenAlle = fall.vermoegen.filter((v) => istSchenkungsgut(fall, v) && Number(v.eigentum?.[reich] || 0) > 0);
   const eigeneArm = fall.vermoegen.filter((v) => v.art !== 'verbindlichkeit' && Number(v.eigentum?.[arm] || 0) > 0 && uebertragbar(fall, v));
-  const heim = eigeneArm.filter((v) => v.art === 'immobilie' && v.nutzung === 'familienheim');
+  const heim = eigeneArm.filter((v) => istFamilienheim(fall, v));
   const nichtT = eigeneArm.filter((v) => !istSchenkungsgut(fall, v));
   const gruppen = [[], heim, nichtT, eigeneArm];
   const gesehen = new Set();
@@ -362,7 +368,7 @@ function ausgleichVarianten(fall, d) {
     if (!quellen.length) continue;
     const X = summe(quellen, (v) => netto(v, reich));
     const cT = summe(gg.filter((v) => istSchenkungsgut(fall, v)), (v) => netto(v, arm));
-    const gegenwertOhneHeim = summe(gg.filter((v) => v.nutzung !== 'familienheim'), (v) => sw(v) * Number(v.eigentum[arm]));
+    const gegenwertOhneHeim = summe(gg.filter((v) => !istFamilienheim(fall, v)), (v) => sw(v) * Number(v.eigentum[arm]));
     // Quote, bei der beide Ehegatten danach gleich viel übertragbares Vermögen halten
     const restReich = tWert(reich) - X;
     const qGleich = Math.round(Math.min(1, Math.max(0.05, (2 * cT + X + restReich - xArm) / (2 * X))) * 100) / 100;
@@ -441,7 +447,7 @@ function ausgleichBaustein(fall, { reich, arm, q, quellen, gg }) {
   const hinweise = [
     'Ehebedingte Zuwendung. Danach können beide Ehegatten ihre Freibeträge gegenüber den Kindern nutzen.',
     `${name(fall, arm)} entscheidet über eine Weitergabe selbst, ohne Verpflichtung und mit deutlichem zeitlichem Abstand; sonst droht die Umqualifizierung in eine direkte Zuwendung (Kettenschenkung).`,
-    ...(gg.some((v) => v.nutzung !== 'familienheim') ? ['Gegenleistungen machen die Übertragung einkommensteuerlich teilentgeltlich (§ 23 EStG prüfen).'] : [])
+    ...(gg.some((v) => !istFamilienheim(fall, v)) ? ['Gegenleistungen machen die Übertragung einkommensteuerlich teilentgeltlich (§ 23 EStG prüfen).'] : [])
   ];
   return {
     key: 'V',
@@ -531,23 +537,79 @@ function bausteinEnkel(fall) {
   return { key: 'E', titel: 'Schenkungen an Enkel', texte, hinweise: [`Freibetrag je Enkel ${fmtEuro(R.freibetrag.enkel)}.`], schritte: (d) => schritte.map((s) => ({ ...s, datum: d.enkel })) };
 }
 
+/**
+ * Familienheim an die Kinder unter Nießbrauchsvorbehalt (Folgenießbrauch für den Ehegatten).
+ * Nutzt die Freibeträge zu Lebzeiten; die Befreiung nach § 13 Abs. 1 Nr. 4b ErbStG im Erbfall entfällt dafür.
+ */
+function bausteinFamilienheimKinder(fall) {
+  const heim = fall.vermoegen.find((v) => istFamilienheim(fall, v) && uebertragbar(fall, v));
+  if (!heim) return null;
+  const ziel = zielVerteilung(fall, heim.id);
+  const kandidaten = [];
+  for (const g of geberListe(fall)) {
+    const q = Number(heim.eigentum?.[g] || 0);
+    const empf = Object.fromEntries(Object.entries(ziel).filter(([id]) => id !== ehegatte(fall, g)));
+    if (q <= 1e-6 || !Object.keys(empf).length || vw(heim) * q < 100000) continue;
+    const aus = heim._ausgleich?.[g];
+    kandidaten.push({ g, a: heim, q, empf: normiere(empf), vorbehalt: aus?.von || null, spaet: !!aus });
+  }
+  if (!kandidaten.length) return null;
+  const geber = kandidaten.map((k) => name(fall, k.g));
+  return {
+    key: 'H',
+    titel: 'Familienheim an Kinder unter Nießbrauch',
+    texte: [`${liste(geber)} ${geber.length > 1 ? 'übertragen ihre Anteile' : 'überträgt den Anteil'} an „${heim.bezeichnung || 'Familienheim'}“ an ${namen(fall, Object.keys(kandidaten[0].empf))} und ${geber.length > 1 ? 'behalten' : 'behält'} sich den Nießbrauch vor${geberListe(fall).length === 2 ? ', danach steht er dem Längerlebenden zu' : ''}.`],
+    hinweise: [
+      'Nutzt die Freibeträge zu Lebzeiten; dafür entfällt im Erbfall die Befreiung des Familienheims für den Ehegatten (§ 13 Abs. 1 Nr. 4b ErbStG). Der Längerlebende bleibt über den Nießbrauch abgesichert.',
+      'Statt Nießbrauch kommt ein Wohnungsrecht in Betracht; Rückforderungsrecht für Veräußerung, Insolvenz und Vorversterben vorsehen.'
+    ],
+    schritte: (d) => kandidaten.map((k) => schenkungsSchritt(fall, { ...k, quote: k.q, datum: k.spaet ? d.weitergabe : d.schenkung, titel: `Überlassung ${heim.bezeichnung || 'Familienheim'}` }))
+  };
+}
+
+/** Geldschenkungen an die Kinder bis zur Hälfte der Liquidität, je Kind höchstens bis zum Freibetrag. */
+function bausteinGeldKinder(fall) {
+  const schritte = [];
+  const texte = [];
+  for (const g of geberListe(fall)) {
+    const liquide = fall.vermoegen.filter((a) => a.art === 'geld' && Number(a.eigentum?.[g] || 0) > 0 && uebertragbar(fall, a));
+    if (!liquide.length) continue;
+    const quelle = liquide.sort((x, y) => vw(y) * y.eigentum[g] - vw(x) * x.eigentum[g])[0];
+    const empf = Object.keys(zielVerteilung(fall, quelle.id)).filter((id) => id !== ehegatte(fall, g) && personMap(fall).get(id)?.rolle === 'kind');
+    const verfuegbar = summe(liquide, (a) => vw(a) * Number(a.eigentum[g]));
+    if (!empf.length || verfuegbar < 50000) continue;
+    const je = Math.min(R.freibetrag.kind, (verfuegbar * 0.5) / empf.length, (vw(quelle) * Number(quelle.eigentum[g])) / empf.length);
+    if (je < 20000) continue;
+    schritte.push({ id: neueId('st'), typ: 'schenkung', titel: 'Geldschenkung an Kinder', von: g, gegenstaende: [{ assetId: quelle.id, betrag: Math.round(je * empf.length) }], empfaenger: Object.fromEntries(empf.map((e) => [e, 1 / empf.length])), nutzung: { typ: 'keine' }, gegenleistungen: [] });
+    texte.push(`${name(fall, g)} schenkt ${namen(fall, empf)} je ${fmtEuro(je)} aus „${quelle.bezeichnung || 'Geldvermögen'}“.`);
+  }
+  if (!schritte.length) return null;
+  return { key: 'K', titel: 'Geldschenkung an Kinder', texte, hinweise: ['Ohne Nießbrauch; höchstens die Hälfte der Liquidität, damit die Vermögensgeber versorgt bleiben.'], schritte: (d) => schritte.map((x) => ({ ...x, datum: d.schenkung })) };
+}
+
 // ------------------------------------------------------------------ Kombination und Bewertung
 
-const KOMBINATIONEN = [
-  ['T'], ['S'], ['S2'], ['F'], ['G'], ['P'], ['A'], ['E'],
-  ['T', 'S'], ['T', 'S2'], ['T', 'F'], ['T', 'G'], ['T', 'E'], ['T', 'A'],
-  ['T', 'S', 'F'], ['T', 'S2', 'F'], ['T', 'S', 'G'], ['T', 'S2', 'G'], ['T', 'G', 'F'], ['T', 'S', 'E'], ['T', 'S2', 'E'],
-  ['T', 'S', 'F', 'G'], ['T', 'S2', 'F', 'G'], ['T', 'S', 'A'], ['T', 'S2', 'A'],
-  ['S', 'P'], ['S2', 'P'], ['F', 'P'], ['G', 'F', 'S2'],
-  // Vermögensausgleich unter Ehegatten mit anschließenden Schenkungen beider Ehegatten
-  ['V', 'S'], ['V', 'S2'], ['T', 'V'], ['T', 'V', 'S'], ['T', 'V', 'S2'], ['V', 'S', 'P'], ['V', 'S2', 'P'], ['T', 'V', 'S', 'E'], ['T', 'V', 'S2', 'E']
-];
+/**
+ * Stufen der Gestaltung. Aus jeder Stufe wird höchstens eine Option gewählt; das kartesische Produkt
+ * ergibt die Kandidaten. Mehrstufige Konzepte entstehen so aus der Vorstufe unter Ehegatten
+ * (Vermögensausgleich, Familienheim, Güterstandsschaukel), der späteren Weitergabe an die Kinder
+ * (sofort oder in Tranchen über zehn Jahre, Familienheim, Geld), der Verfügung von Todes wegen
+ * mit Freibetragsvermächtnissen und der Option im ersten Erbfall.
+ */
+const STUFE_LEBZEITEN = [[], ['S'], ['S2'], ['H'], ['S', 'H'], ['S2', 'H'], ['K'], ['S', 'K'], ['S2', 'K'], ['S', 'H', 'K'], ['S2', 'H', 'K']];
+const STUFE_VERFUEGUNG = [[], ['T']];
+const STUFE_ENKEL = [[], ['E']];
+const STUFE_ERBFALL = [[], ['P'], ['A']];
+/** Höchstzahl gerechneter Kombinationen (Rechenzeit auf dem iPad). */
+const BUDGET = 160;
+/** Varianten des Vermögensausgleichs, die in die volle Kombination gehen. */
+const MAX_AUSGLEICH = 3;
 
 /** Bausteine, deren Inhalt vom Eigentum abhängt (nach einem Vermögensausgleich neu zu bilden). */
 function eigentumsBausteine(fall, d, vorSchritte = [], basisFall = fall) {
   const kandidaten = schenkungsKandidaten(fall);
   const res = {};
-  for (const b of [bausteinSchenkung(fall, kandidaten), bausteinTranchen(basisFall, kandidaten, d, vorSchritte), bausteinEnkel(fall)]) {
+  for (const b of [bausteinSchenkung(fall, kandidaten), bausteinTranchen(basisFall, kandidaten, d, vorSchritte), bausteinEnkel(fall), bausteinFamilienheimKinder(fall), bausteinGeldKinder(fall)]) {
     if (b) res[b.key] = b;
   }
   return res;
@@ -559,7 +621,7 @@ function eigentumsBausteine(fall, d, vorSchritte = [], basisFall = fall) {
  */
 const MIN_ERSPARNIS = 500;
 
-export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3 } = {}) {
+export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3, budget = BUDGET } = {}) {
   const k = kontextFuer(fall);
   const basisSz = fall.szenarien.find((s) => s.basis) || { id: 'basis', schritte: [], erbfallOptionen: {} };
   const basis = bewerteSzenario(fall, basisSz, k, { ohneKettenpruefung: true });
@@ -579,34 +641,77 @@ export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3 } = {}) {
   for (const b of [bausteinTestament(fall), bausteinFamilienheim(fall), bausteinSchaukel(fall), bausteinPflichtteil(fall), bausteinAusschlagung(fall)]) {
     if (b) bausteine[b.key] = b;
   }
-  const varianten = ausgleichVarianten(fall, d);
   // Pflichtteil nur ohne neues Testament sinnvoll, wenn bereits ein Ehegattentestament besteht
   const berliner = ['a', 'b'].every((sl) => !fall.geber[sl] || fall.verfuegungen?.[sl]?.typ === 'alleinerbe_ehegatte');
+
+  // Vorstufe: je Variante des Vermögensausgleichs ein eigener Bausteinsatz (Eigentum danach)
+  const vorstufen = [{ keys: [], verfuegbar: bausteine }];
+  if (bausteine.F) vorstufen.push({ keys: ['F'], verfuegbar: bausteine });
+  if (bausteine.G) vorstufen.push({ keys: ['G'], verfuegbar: bausteine });
+  if (bausteine.G && bausteine.F) vorstufen.push({ keys: ['G', 'F'], verfuegbar: bausteine });
+  const ausgleich = ausgleichVarianten(fall, d).map((v) => {
+    const vSchritte = v.schritte(d);
+    const nach = eigentumsBausteine(v.fallNach, d, vSchritte, fall);
+    // der Ausgleichsschritt wird je Variante einmal erzeugt, damit Schritt-IDs stabil bleiben
+    return { keys: ['V'], verfuegbar: { ...bausteine, ...nach, V: { ...v, schritte: () => vSchritte } } };
+  });
 
   const gesehen = new Set();
   const ergebnisse = [];
   const rechne = (kombi, verfuegbar) => {
-    if (!kombi.every((key) => verfuegbar[key])) return;
-    if (kombi.includes('P') && (!berliner || kombi.includes('T'))) return;
+    if (!kombi.length || !kombi.every((key) => verfuegbar[key])) return null;
+    if (kombi.includes('P') && (!berliner || kombi.includes('T'))) return null;
+    // Familienheim an den Ehegatten und an die Kinder schließen sich aus
+    if (kombi.includes('F') && kombi.includes('H')) return null;
     const teile = kombi.map((key) => verfuegbar[key]);
     const schritte = teile.flatMap((b) => b.schritte(d));
-    if (!uebertragungenZulaessig(fall, schritte)) return;
+    if (!uebertragungenZulaessig(fall, schritte)) return null;
     const erbfallOptionen = Object.assign({}, ...teile.map((b) => b.erbfallOptionen || {}));
     const sig = JSON.stringify([schritte.map((s) => [s.typ, s.von, s.datum, s.gegenstaende, s.empfaenger, s.form, s.gegenleistungen?.map((g) => [g.assetId, g.quote])]), erbfallOptionen]);
-    if (gesehen.has(sig)) return;
+    if (gesehen.has(sig)) return ergebnisse.find((e) => e.sig === sig) || null;
     gesehen.add(sig);
-    const sz = { id: `vorschlag_${kombi.join('')}`, name: teile.map((b) => b.titel).join(' + '), schritte, erbfallOptionen };
+    const sz = { id: `vorschlag_${kombi.join('')}_${ergebnisse.length}`, name: teile.map((b) => b.titel).join(' + '), schritte, erbfallOptionen };
     let r;
-    try { r = bewerteSzenario(fall, sz, k, { ohneKettenpruefung: true }); } catch (e) { return; }
-    ergebnisse.push({ kombi, teile, sz, r });
+    try { r = bewerteSzenario(fall, sz, k, { ohneKettenpruefung: true }); } catch (e) { return null; }
+    const e = { kombi, teile, sz, r, sig };
+    ergebnisse.push(e);
+    return e;
   };
-  for (const kombi of KOMBINATIONEN) {
-    if (!kombi.includes('V')) { rechne(kombi, bausteine); continue; }
-    for (const v of varianten) {
-      const vSchritte = v.schritte(d);
-      const nach = eigentumsBausteine(v.fallNach, d, vSchritte, fall);
-      // der Ausgleichsschritt wird je Variante einmal erzeugt, damit Schritt-IDs stabil bleiben
-      rechne(kombi, { ...bausteine, ...nach, V: { ...v, schritte: () => vSchritte } });
+  const verfuegbareStufe = (stufe, verfuegbar) => stufe.filter((o) => o.every((key) => verfuegbar[key]));
+  const produkt = (vor, lebzeiten) => {
+    const res = [];
+    for (const l of verfuegbareStufe(lebzeiten, vor.verfuegbar)) {
+      for (const t of verfuegbareStufe(STUFE_VERFUEGUNG, vor.verfuegbar)) {
+        for (const en of verfuegbareStufe(STUFE_ENKEL, vor.verfuegbar)) {
+          for (const o of verfuegbareStufe(STUFE_ERBFALL, vor.verfuegbar)) res.push([...t, ...vor.keys, ...l, ...en, ...o]);
+        }
+      }
+    }
+    return res;
+  };
+
+  // 1. Varianten des Vermögensausgleichs vorab mit der üblichen Weitergabe rechnen und die besten behalten
+  const besteAusgleich = ausgleich
+    .map((v) => ({ v, e: [['T', 'V', 'S2'], ['T', 'V', 'S'], ['V', 'S2']].map((kb) => rechne(kb, v.verfuegbar)).filter(Boolean).sort((x, y) => x.r.erwartet - y.r.erwartet)[0] }))
+    .filter((x) => x.e)
+    .sort((x, y) => x.e.r.erwartet - y.e.r.erwartet)
+    .slice(0, MAX_AUSGLEICH)
+    .map((x) => x.v);
+  const alleVorstufen = [...vorstufen, ...besteAusgleich];
+
+  // 2. Lebzeitige Optionen bei zu vielen Kombinationen vorab ausdünnen (ohne Vorstufe gerechnet)
+  let lebzeiten = STUFE_LEBZEITEN;
+  const anzahl = () => summe(alleVorstufen, (v) => produkt(v, lebzeiten).length);
+  if (anzahl() > budget) {
+    const rang = lebzeiten.map((l) => ({ l, best: Math.min(...[['T', ...l], l].map((kb) => rechne(kb, bausteine)?.r.erwartet ?? Infinity)) }))
+      .sort((x, y) => x.best - y.best);
+    lebzeiten = [[], ...rang.filter((x) => x.l.length && x.best < Infinity).slice(0, 4).map((x) => x.l)];
+  }
+  // 3. Volles Produkt
+  for (const v of alleVorstufen) {
+    for (const kombi of produkt(v, lebzeiten)) {
+      if (ergebnisse.length >= budget * 1.5) break;
+      rechne(kombi, v.verfuegbar);
     }
   }
 
@@ -620,16 +725,25 @@ export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3 } = {}) {
       return zx - zy || x.r.erwartet - y.r.erwartet || x.kombi.length - y.kombi.length;
     });
 
-  // Ähnliche Vorschläge ausdünnen: höchstens ein Vorschlag je Kernbaustein-Kombination ohne Testament
+  // Ähnliche Vorschläge ausdünnen. Je Bausteinkombination nur die beste Variante, und je Vorstufe unter
+  // Ehegatten (Vermögensausgleich, Familienheim, Schaukel, keine) zunächst höchstens zwei Vorschläge,
+  // damit auch Wege ohne die günstigste Vorstufe sichtbar bleiben.
+  const vorstufe = (e) => e.kombi.filter((key) => ['V', 'F', 'G'].includes(key)).join('') || '-';
   const auswahl = [];
-  for (const e of gut) {
-    if (auswahl.length >= maxAnzahl) break;
-    // keine Erweiterung eines gewählten Vorschlags, die nichts bringt
-    if (auswahl.some((x) => x.kombi.every((key) => e.kombi.includes(key)) && x.r.erwartet <= e.r.erwartet + 500)) continue;
-    // keine nahezu gleichwertige Variante mit mehr Bausteinen
-    if (auswahl.some((x) => Math.abs(x.r.erwartet - e.r.erwartet) < 1000 && x.kombi.length <= e.kombi.length)) continue;
-    auswahl.push(e);
+  for (const proVorstufe of [2, Infinity]) {
+    for (const e of gut) {
+      if (auswahl.length >= maxAnzahl) break;
+      if (auswahl.includes(e)) continue;
+      if (auswahl.some((x) => x.kombi.join('+') === e.kombi.join('+'))) continue;
+      if (auswahl.filter((x) => vorstufe(x) === vorstufe(e)).length >= proVorstufe) continue;
+      // keine Erweiterung eines gewählten Vorschlags, die nichts bringt
+      if (auswahl.some((x) => x.kombi.every((key) => e.kombi.includes(key)) && x.r.erwartet <= e.r.erwartet + 500)) continue;
+      // keine nahezu gleichwertige Variante mit mehr Bausteinen
+      if (auswahl.some((x) => Math.abs(x.r.erwartet - e.r.erwartet) < 1000 && x.kombi.length <= e.kombi.length)) continue;
+      auswahl.push(e);
+    }
   }
+  auswahl.sort((x, y) => x.r.erwartet - y.r.erwartet);
   // Erweiterungen ohne nennenswerten Vorteil gegenüber einem kleineren Vorschlag entfernen
   for (const e of [...auswahl]) {
     if (auswahl.some((x) => x !== e && x.kombi.length < e.kombi.length && x.kombi.every((key) => e.kombi.includes(key)) && x.r.erwartet - e.r.erwartet < 1000 && (zielStatus(x.r.ziel) !== false || zielStatus(e.r.ziel) === false))) {

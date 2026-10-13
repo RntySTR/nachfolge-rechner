@@ -46,7 +46,7 @@ const SEITEN = [
     inhalt: () => `
       <p>Im Schritt „Szenarien“ prüft der Rechner übliche Gestaltungen, rechnet jede Kombination durch und zeigt die günstigsten, die das Ziel erreichen.</p>
       <ul class="tut-liste">
-        <li>Bausteine: Erbvertrag mit Freibetragsvermächtnissen, Schenkung unter Nießbrauchsvorbehalt (auch in Tranchen), Vermögensausgleich unter Ehegatten, Güterstandsschaukel, Familienheim, Pflichtteil, Ausschlagung, Schenkungen an Enkel.</li>
+        <li>Bausteine: Erbvertrag mit Freibetragsvermächtnissen, Schenkung unter Nießbrauchsvorbehalt (auch in Tranchen), Vermögensausgleich unter Ehegatten, Güterstandsschaukel, Familienheim an Ehegatten oder Kinder, Geldschenkungen, Pflichtteil, Ausschlagung, Schenkungen an Enkel. Kombiniert wird stufenweise, auch mehrstufig (z. B. Ausgleich unter Ehegatten, danach Weitergabe an die Kinder in Tranchen, dazu Erbvertrag).</li>
         <li>Je Zeile ein Baustein, je Spalte ein Vorschlag.</li>
         <li>Gibt es weniger als drei Vorschläge, zeigt der Rechner zusätzlich verworfene Kombinationen mit dem Grund, etwa Mehrbelastung oder Ziel verfehlt.</li>
         <li>„Als Szenario übernehmen“ legt eine Spalte als eigenes Szenario an. Eigene Szenarien lassen sich aus Schritten wie Schenkung, Güterstandsschaukel oder Testament zusammenstellen.</li>
