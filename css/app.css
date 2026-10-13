@@ -513,7 +513,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 }
 
 @media print {
-  .nav, .mobilkopf, .kopf .aktionen, .annahmen .seg, .sheet, .sheet-hg, .toast, .btn { display: none !important; }
+  .nav, .mobilkopf, .kopf .aktionen, .annahmen .seg, .sheet, .sheet-hg, .tutorial, .toast, .btn { display: none !important; }
   .app { display: block; }
   .content { padding: 0; max-width: none; }
   .flaeche, .kachel, .hinweis, .asset { break-inside: avoid; }
@@ -524,7 +524,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .druckfassung { display: none; }
 @page { size: A4; margin: 12mm 13mm; }
 @media print {
-  body.druck-mandant .app, body.druck-mandant .sheet, body.druck-mandant .sheet-hg, body.druck-mandant .toast { display: none !important; }
+  body.druck-mandant .app, body.druck-mandant .sheet, body.druck-mandant .sheet-hg, body.druck-mandant .tutorial, body.druck-mandant .toast { display: none !important; }
   body.druck-mandant .druckfassung { display: block; }
   body.druck-mandant { font-size: 9pt; line-height: 1.4; color: #1b2328; background: #fff; }
 }
@@ -743,3 +743,34 @@ details.bs-hinweise-wrap[open] > summary { margin-bottom: 6px; }
 .raster > .flaeche + .flaeche { margin-top: 0; }
 .raster > .flaeche.raster { align-content: start; }
 @media print { .info-tip, .vs-knoepfe, .annahme-zeile .btn { display: none !important; } }
+
+/* ---------------------------------------------------------------- Tutorial beim ersten Start */
+.tutorial { display: none; }
+.tutorial-offen .tutorial { display: block; }
+.tut-hg { position: fixed; inset: 0; background: rgba(14, 26, 32, 0.45); z-index: 60; }
+.tut {
+  position: fixed; z-index: 61; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(580px, calc(100vw - 32px)); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
+  display: flex; flex-direction: column; background: var(--surface); border-radius: 16px; box-shadow: 0 24px 64px rgba(14, 26, 32, 0.28);
+}
+.tut-kopf { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0 24px; }
+.tut-zaehler { font: 500 13px/1 var(--font-display); color: var(--brand); }
+.tut-inhalt { flex: 1; overflow-y: auto; padding: 14px 24px 8px; display: grid; gap: 14px; align-content: start; }
+.tut-inhalt h2 { font-size: 24px; }
+.tut-inhalt p { margin: 0; }
+.tut-liste { margin: 0; padding-left: 20px; display: grid; gap: 8px; line-height: 1.5; }
+.tut-schritte { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.tut-schritte li { display: flex; gap: 12px; align-items: flex-start; }
+.tut-schritte li > span:last-child { display: grid; gap: 2px; }
+.tut-ico { flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--brand-tint); color: var(--brand); }
+.tut-punkte { display: flex; justify-content: center; padding: 4px 0 0; }
+.tut-punkt { all: unset; box-sizing: border-box; width: 26px; height: 26px; padding: 8px; border-radius: 50%; background: var(--border); background-clip: content-box; cursor: pointer; }
+.tut-punkt[aria-current="true"] { background-color: var(--brand); }
+.tut-punkt:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.tut-fuss { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 20px 18px; border-top: 1px solid var(--line); }
+.tut-start { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 520px) {
+  .tut-fuss { flex-direction: column-reverse; align-items: stretch; }
+  .tut-fuss .btn { justify-content: center; }
+  .tut-start { flex-direction: column-reverse; }
+}

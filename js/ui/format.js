@@ -13,7 +13,8 @@ const ZAHLWORTE = {
 
 /** Anzahl im Fließtext: Zahlen bis zwölf als Wort („zwei Vermächtnisse“), darüber als Ziffer. */
 export function anzahl(n, einzahl, mehrzahl, genus = 'n') {
-  const w = (ZAHLWORTE[genus === 'f' ? 'f' : 'm'][n] ?? String(n));
+  // Null steht immer im Plural: „keine Werte“, „keine Personen“
+  const w = n === 0 ? 'keine' : (ZAHLWORTE[genus === 'f' ? 'f' : 'm'][n] ?? String(n));
   return `${w} ${n === 1 ? einzahl : mehrzahl}`;
 }
 

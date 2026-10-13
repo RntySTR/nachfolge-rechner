@@ -4,6 +4,7 @@ import { beispielfall } from '../data/beispiel.js';
 import { heute, neueId, tiefeKopie } from '../engine/util.js';
 
 const KEY = 'nachfolge-rechner.v1';
+const KEY_TUTORIAL = 'nachfolge-rechner.tutorial.v1';
 
 export const state = {
   faelle: [],
@@ -12,6 +13,8 @@ export const state = {
   szenarioId: null,
   detail: { szenarioId: null, reihenfolge: 'gewichtet', tab: 'zeitachse', offen: {} },
   sheet: null,
+  /** Aktueller Schritt des Tutorials (0-basiert) oder null, wenn es geschlossen ist. */
+  tutorial: null,
   offenSz: {},
   offenBs: {},
   szReihenfolge: null,
@@ -35,12 +38,34 @@ export function laden() {
   } catch (e) {
     state.speicherFehler = true;
   }
-  if (!state.faelle.length) {
-    const f = beispielfall();
-    state.faelle = [f];
-    state.aktivId = f.id;
-  }
+  // Erster Start: ein leerer Fall und das Tutorial; der Beispielfall wird nur auf Wunsch geladen
+  if (!state.faelle.length) neuerFall();
   if (!state.faelle.some((f) => f.id === state.aktivId)) state.aktivId = state.faelle[0].id;
+  if (!tutorialGesehen()) state.tutorial = 0;
+}
+
+export function tutorialGesehen() {
+  try {
+    return localStorage.getItem(KEY_TUTORIAL) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+export function tutorialMerken() {
+  try {
+    localStorage.setItem(KEY_TUTORIAL, '1');
+  } catch (e) {
+    /* ohne lokale Speicherung erscheint das Tutorial bei jedem Start */
+  }
+}
+
+/** Ein Fall ohne jede Eingabe (frisch angelegt). */
+export function istLeer(f) {
+  return !f.vermoegen.length
+    && f.personen.every((p) => !p.vorname && !p.geburt)
+    && f.szenarien.every((s) => s.basis)
+    && !(f.vorschenkungen || []).length;
 }
 
 export function speichern() {
@@ -107,6 +132,9 @@ export function neuerFall({ ehepaar = true, titel = 'Neuer Fall' } = {}) {
 }
 
 export function beispielLaden() {
+  // Ein noch leerer Fall wird durch das Beispiel ersetzt, damit keine Leerfälle liegen bleiben
+  const aktuell = fall();
+  if (aktuell && istLeer(aktuell)) state.faelle = state.faelle.filter((x) => x !== aktuell);
   const f = beispielfall();
   f.id = neueId('fall');
   state.faelle.push(migriere(f));
