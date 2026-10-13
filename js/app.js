@@ -1,6 +1,7 @@
 // Einstieg: Navigation, Rendering, Ereignisse.
 
-import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispielLaden, fallDuplizieren, fallLoeschen, exportieren, importieren, personEntfernen, vermoegenEntfernen } from './ui/store.js';
+import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispielLaden, fallDuplizieren, fallLoeschen, exportieren, importieren, personEntfernen, vermoegenEntfernen, tutorialMerken, istLeer } from './ui/store.js';
+import { tutorialHtml, TUTORIAL_SEITEN } from './ui/tutorial.js';
 import { ansichtFamilie, ansichtVermoegen, ansichtAusgangslage } from './ui/ansichten.js';
 import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer } from './ui/ergebnisse.js';
 import { sheetInhalt } from './ui/sheets.js';
@@ -72,10 +73,36 @@ function render() {
   $('#content').innerHTML = ansicht[3](f) + schrittNav(idx);
   $('#mobil-titel').textContent = f.titel || 'Fall';
   renderSheet(f);
+  renderTutorial();
   if (ansicht[0] === 'familie') requestAnimationFrame(zeichneLinien);
 
   fokusSetzen(fokus);
   if (scrollSheet != null && $('.sheet-inhalt')) $('.sheet-inhalt').scrollTop = scrollSheet;
+}
+
+// Tutorial: nur neu zeichnen, wenn sich die Seite ändert, damit der Fokus auf den Schaltflächen bleibt
+let tutorialZuletzt = null;
+function renderTutorial() {
+  const el = $('#tutorial');
+  const offen = state.tutorial != null;
+  document.body.classList.toggle('tutorial-offen', offen);
+  if (!offen) {
+    el.innerHTML = '';
+    tutorialZuletzt = null;
+    return;
+  }
+  const leer = istLeer(fall());
+  const schluessel = `${state.tutorial}|${leer}`;
+  if (tutorialZuletzt === schluessel) return;
+  tutorialZuletzt = schluessel;
+  el.innerHTML = tutorialHtml(state.tutorial, { leer });
+  $('[data-fokus]', el)?.focus({ preventScroll: true });
+  $('.tut-inhalt', el)?.scrollTo?.(0, 0);
+}
+
+function tutorialSchliessen() {
+  tutorialMerken();
+  state.tutorial = null;
 }
 
 function schrittNav(idx) {
@@ -225,6 +252,10 @@ const AKTIONEN = {
   'sheet-schliessen': () => { state.sheet = null; render(); },
   faelle: () => { state.sheet = { typ: 'faelle' }; render(); },
   info: () => { state.sheet = { typ: 'info' }; render(); },
+  'tutorial-oeffnen': () => { state.sheet = null; state.tutorial = 0; render(); },
+  'tutorial-seite': (d) => { state.tutorial = Math.max(0, Math.min(TUTORIAL_SEITEN - 1, Number(d.i) || 0)); render(); },
+  'tutorial-schliessen': () => { tutorialSchliessen(); render(); },
+  'tutorial-beispiel': () => { tutorialSchliessen(); state.sheet = null; beispielLaden(); render(); window.scrollTo(0, 0); toast('Beispielfall geladen'); },
   nav: (d) => { state.ansicht = d.ziel; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
 
   'person-bearbeiten': (d) => { state.sheet = { typ: 'person', id: d.id }; render(); },
@@ -540,6 +571,18 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.tutorial != null) { tutorialSchliessen(); render(); return; }
+  if (e.key === 'Tab' && state.tutorial != null) {
+    // Fokus im Tutorial-Dialog halten
+    const feld = [...document.querySelectorAll('#tutorial .tut button')].filter((b) => !b.disabled);
+    if (feld.length) {
+      const i = feld.indexOf(document.activeElement);
+      const ziel = e.shiftKey ? (i <= 0 ? feld[feld.length - 1] : feld[i - 1]) : (i === -1 || i === feld.length - 1 ? feld[0] : feld[i + 1]);
+      e.preventDefault();
+      ziel.focus();
+    }
+    return;
+  }
   if (e.key === 'Escape' && state.sheet) { state.sheet = null; render(); }
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); return; }
   if (e.key === 'Enter' && e.target.matches('input.input')) e.target.blur();

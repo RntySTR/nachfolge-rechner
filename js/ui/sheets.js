@@ -388,6 +388,7 @@ function sheetInfo() {
       <p class="small muted">Vervielfältiger: BMF-Schreiben vom 21.10.2025 (Bewertungsstichtage ab 1.1.2026). Lebenserwartung: Sterbetafel 2022/2024. Gebühren: Tabelle B GNotKG.</p>
       <p class="small muted">Nicht abgebildet: Betriebsvermögen (§§ 13a–13c ErbStG), Familiengesellschaften, Auslandsbezug, Vor- und Nacherbschaft (§ 6 ErbStG), Einkommensteuer (nur Hinweise).</p>
       <p class="small muted">Alle Eingaben bleiben im Browser dieses Geräts. Personen werden nur mit Vornamen erfasst.</p>
+      <div class="chips">${aktionsknopf('tutorial-oeffnen', 'Anleitung anzeigen', { ico: 'info', cls: 'klein' })}</div>
     </div>`
   };
 }
