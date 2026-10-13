@@ -251,3 +251,51 @@ test('Vorschläge: keine Übertragung an Minderjährige und keine nach Lebenserw
     }
   }
 });
+
+// Kleines Vermögen: keine Gestaltung senkt die Belastung, jede kostet mindestens Notargebühren.
+function kleinerFall() {
+  const fall = beispielfall();
+  const zehntel = (x) => (x != null && x !== '' ? Math.round(Number(x) / 10) : x);
+  fall.vermoegen = fall.vermoegen.map((a) => ({ ...a, verkehrswert: zehntel(a.verkehrswert), steuerwert: zehntel(a.steuerwert), jahresertrag: zehntel(a.jahresertrag) }));
+  return fall;
+}
+
+test('Vorschläge: ohne Verbesserung werden verworfene Kombinationen mit Grund angezeigt', async () => {
+  const { vorschlaege } = await import('../js/engine/strategien.js');
+  const v = vorschlaege(kleinerFall());
+  assert.equal(v.liste.length, 3, 'auf drei Spalten aufgefüllt');
+  const keys = new Set();
+  for (const x of v.liste) {
+    assert.equal(x.verworfen, true);
+    assert.ok(x.gruende.length > 0, `Grund fehlt für ${x.titel}`);
+    assert.ok(x.ersparnis < 500, `${x.titel} spart ${x.ersparnis}`);
+    assert.ok(x.gruende.some((g) => /Mehrbelastung|Ersparnis unter/.test(g)));
+    keys.add(x.bausteine.join('+'));
+  }
+  assert.equal(keys.size, 3, 'je Kombination von Bausteinen eine Spalte');
+  const mehr = v.liste.filter((x) => x.ersparnis < -0.5);
+  assert.ok(mehr.length > 0, 'mindestens eine Verschlechterung wird gezeigt');
+  for (const x of mehr) assert.ok(x.gruende.some((g) => g.startsWith('Mehrbelastung von ')));
+});
+
+test('Vorschläge: verworfene Spalten stehen hinter echten Vorschlägen und füllen nur bis drei auf', async () => {
+  const { vorschlaege } = await import('../js/engine/strategien.js');
+  const fall = beispielfall();
+  // Ab drei echten Vorschlägen keine verworfenen Spalten
+  const voll = vorschlaege(fall);
+  assert.ok(voll.liste.length >= 3);
+  assert.ok(voll.liste.every((x) => !x.verworfen && x.gruende.length === 0));
+  // Bei künstlich nur einem Vorschlag: Vorschlag zuerst, danach verworfene bis insgesamt drei
+  const eng = vorschlaege(fall, { maxAnzahl: 1 });
+  assert.equal(eng.liste.length, 3);
+  assert.deepEqual(eng.liste.map((x) => x.verworfen), [false, true, true]);
+  assert.ok(eng.liste[0].ersparnis > 500);
+  for (const x of eng.liste.filter((y) => y.verworfen)) {
+    assert.ok(x.gruende.length > 0);
+    assert.ok(!eng.liste.slice(0, 1).some((e) => e.id === x.id), 'kein Vorschlag zugleich verworfen');
+    assert.ok(x.ersparnis < 500 || x.gruende.some((g) => /Ziel/.test(g)));
+  }
+  // mindestAnzahl lässt sich abschalten
+  const ohne = vorschlaege(kleinerFall(), { mindestAnzahl: 0 });
+  assert.equal(ohne.liste.length, 0);
+});

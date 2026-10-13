@@ -553,7 +553,13 @@ function eigentumsBausteine(fall, d, vorSchritte = [], basisFall = fall) {
   return res;
 }
 
-export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
+/**
+ * Ersparnis, ab der eine Kombination als Vorschlag gilt (gewichtete Belastung in €).
+ * Darunter wird sie verworfen und nur angezeigt, wenn weniger als `mindestAnzahl` Vorschläge übrig bleiben.
+ */
+const MIN_ERSPARNIS = 500;
+
+export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3 } = {}) {
   const k = kontextFuer(fall);
   const basisSz = fall.szenarien.find((s) => s.basis) || { id: 'basis', schritte: [], erbfallOptionen: {} };
   const basis = bewerteSzenario(fall, basisSz, k, { ohneKettenpruefung: true });
@@ -606,7 +612,7 @@ export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
 
   const zielBasis = zielStatus(basis.ziel);
   const gut = ergebnisse
-    .filter((e) => e.r.erwartet < basis.erwartet - 500)
+    .filter((e) => e.r.erwartet < basis.erwartet - MIN_ERSPARNIS)
     .filter((e) => zielBasis !== true || zielStatus(e.r.ziel) !== false)
     .sort((x, y) => {
       const zx = zielStatus(x.r.ziel) === false ? 1 : 0;
@@ -631,7 +637,7 @@ export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
     }
   }
   // Vollständige Bewertung (inkl. Kettenprüfung) für die Auswahl
-  const liste = auswahl.map((e) => {
+  const aufbereiten = (e, gruende = null) => {
     const voll = bewerteSzenario(fall, e.sz, k);
     for (const b of e.teile) {
       if (!b.textNach) continue;
@@ -646,9 +652,42 @@ export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
       texte: e.teile.flatMap((b) => b.texte),
       szenario: e.sz,
       ergebnis: voll,
-      ersparnis: basis.erwartet - voll.erwartet
+      ersparnis: basis.erwartet - voll.erwartet,
+      verworfen: !!gruende,
+      gruende: gruende || []
     };
-  });
+  };
+  const liste = auswahl.map((e) => aufbereiten(e));
+
+  // Weniger als `mindestAnzahl` Vorschläge: verworfene Kombinationen ergänzen, damit erkennbar ist,
+  // woran die Gestaltung scheitert (Mehrbelastung, zu geringe Ersparnis, Ziel verfehlt).
+  if (liste.length < mindestAnzahl) {
+    const verwerfungsgruende = (e) => {
+      const gr = [];
+      const diff = e.r.erwartet - basis.erwartet;
+      if (diff > 0.5) gr.push(`Mehrbelastung von ${fmtEuro(diff)} gegenüber ohne Gestaltung`);
+      else if (diff > -MIN_ERSPARNIS) gr.push(`Ersparnis unter ${fmtEuro(MIN_ERSPARNIS)}`);
+      if (zielBasis === true && zielStatus(e.r.ziel) === false) gr.push('Gestaltungsziel wird nicht mehr erreicht');
+      return gr;
+    };
+    const imGut = new Set(gut);
+    const verwendet = new Set(auswahl.map((e) => e.kombi.join('+')));
+    const aufgenommen = [];
+    const verworfen = ergebnisse
+      .filter((e) => !imGut.has(e))
+      .sort((x, y) => x.r.erwartet - y.r.erwartet || x.kombi.length - y.kombi.length);
+    for (const e of verworfen) {
+      if (liste.length >= mindestAnzahl) break;
+      const key = e.kombi.join('+');
+      // je Kombination von Bausteinen höchstens eine Spalte
+      if (verwendet.has(key)) continue;
+      // keine nahezu gleichwertige Variante mit mehr Bausteinen
+      if (aufgenommen.some((x) => Math.abs(x.r.erwartet - e.r.erwartet) < 1000 && x.kombi.length <= e.kombi.length)) continue;
+      verwendet.add(key);
+      aufgenommen.push(e);
+      liste.push(aufbereiten(e, verwerfungsgruende(e)));
+    }
+  }
   return { basis, liste, gerechnet: ergebnisse.length };
 }
 

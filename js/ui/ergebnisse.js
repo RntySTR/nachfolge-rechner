@@ -206,9 +206,14 @@ function bausteinKarte(key, m) {
 function vorschlagsBereich(f, res) {
   const v = vorschlaegeFuer(f);
   const offen = state.vorschlaegeOffen !== false;
-  const erklaerung = `Aus ${v.gerechnet || 0} geprüften Kombinationen üblicher Gestaltungen. Je Zeile ein Baustein, je Spalte ein Vorschlag; sortiert zuerst nach Zielerreichung, dann nach Steuern und Kosten (gewichtet). „Als Szenario übernehmen“ legt den Vorschlag als eigenes Szenario an und nimmt ihn in die Zusammenfassung auf; erneutes Antippen entfernt es wieder. Vorschläge beruhen auf den erfassten Werten und Annahmen; Zivilrecht, Pflichtteilsrechte und die Interessen der Beteiligten sind gesondert zu prüfen.`;
+  const echte = (v.liste || []).filter((x) => !x.verworfen);
+  const anzahlVerworfen = (v.liste || []).length - echte.length;
+  const erklaerung = `Aus ${v.gerechnet || 0} geprüften Kombinationen üblicher Gestaltungen. Je Zeile ein Baustein, je Spalte ein Vorschlag; sortiert zuerst nach Zielerreichung, dann nach Steuern und Kosten (gewichtet). Gibt es weniger als drei Vorschläge, zeigt der Rechner zusätzlich verworfene Kombinationen mit dem Grund der Verwerfung (Mehrbelastung, zu geringe Ersparnis oder Ziel verfehlt). „Als Szenario übernehmen“ legt die Spalte als eigenes Szenario an und nimmt sie in die Zusammenfassung auf; erneutes Antippen entfernt es wieder. Vorschläge beruhen auf den erfassten Werten und Annahmen; Zivilrecht, Pflichtteilsrechte und die Interessen der Beteiligten sind gesondert zu prüfen.`;
+  const keinVorschlag = echte.length
+    ? ''
+    : `<p class="muted">Keine der geprüften Gestaltungen senkt die Belastung spürbar.${anzahlVerworfen ? ' Unten stehen die günstigsten verworfenen Kombinationen mit dem Grund.' : ''}</p>`;
   const kopf = `<div class="vs-kopf">
-    <div><h2 class="mit-info">Vorschläge des Rechners ${infoTip(erklaerung)}</h2>${v.liste?.length ? '' : '<p class="muted">Keine der geprüften Gestaltungen senkt die Belastung spürbar.</p>'}</div>
+    <div><h2 class="mit-info">Vorschläge des Rechners ${infoTip(erklaerung)}</h2>${keinVorschlag}</div>
     <div class="vs-knoepfe">
       ${f.vermoegen.length ? `<button type="button" class="btn ghost klein" data-act="vs-optionen" aria-expanded="${!!state.vsOptionen}">${icon('sliders-horizontal', 16)}Optionen</button>` : ''}
       ${v.liste?.length ? `<button type="button" class="btn ghost klein" data-act="vorschlaege-umschalten">${offen ? 'Ausblenden' : 'Anzeigen'}</button>` : ''}
@@ -235,12 +240,14 @@ function vorschlagsBereich(f, res) {
   const verschieden = reihen.filter((m) => !gemeinsam.includes(m));
   const offenBs = state.offenBs || {};
   const spalten = n + 1;
+  // Echte Vorschläge stehen vor den verworfenen Kombinationen: „Vorschlag 1“ … „Verworfen 1“ …
+  const spaltenName = (i) => (v.liste[i].verworfen ? `Verworfen ${i - echte.length + 1}` : `Vorschlag ${i + 1}`);
   // Gleicher Baustein mit unterschiedlichem Inhalt (z. B. andere Quote): Texte je Vorschlag zeigen
   const inhalt = (m) => {
     const je = [...m.je.entries()];
     const gleich = je.every(([, x]) => JSON.stringify(x.texte) === JSON.stringify(je[0][1].texte));
     return gleich ? bausteinTexte(je[0][1].texte, je[0][1].hinweise, `vs:${m.key}`)
-      : je.map(([i, x]) => `<div class="bs-je"><div class="lbl">Vorschlag ${i + 1}</div>${bausteinTexte(x.texte, i === je[0][0] ? x.hinweise : [], `vs:${m.key}:${i}`)}</div>`).join('');
+      : je.map(([i, x]) => `<div class="bs-je"><div class="lbl">${spaltenName(i)}</div>${bausteinTexte(x.texte, i === je[0][0] ? x.hinweise : [], `vs:${m.key}:${i}`)}</div>`).join('');
   };
   const bausteinZeile = (m) => {
     const offen = !!offenBs[m.key];
@@ -252,20 +259,27 @@ function vorschlagsBereich(f, res) {
   const gruppe = (titel, liste) => (liste.length ? `<tr class="bs-gruppe"><th colspan="${spalten}">${titel}</th></tr>${liste.map(bausteinZeile).join('')}` : '');
   const kopfZellen = v.liste.map((x, i) => {
     const zs = zielStatus(x.ergebnis.ziel);
-    return `<th scope="col" class="vs-spalte${i === 0 ? ' erste' : ''}"><span class="vs-nr">Vorschlag ${i + 1}</span><span class="vs-fig num">− ${euro(x.ersparnis)}</span><span class="vs-lbl">Belastung ${euro(x.ergebnis.erwartet)}${zs === false ? ' · <span class="ziel-nein">Ziel nicht erreicht</span>' : ''}</span></th>`;
+    // Vorzeichen: „−“ Ersparnis, „+“ Mehrbelastung gegenüber ohne Gestaltung
+    const vorzeichen = x.ersparnis > 0.5 ? '− ' : x.ersparnis < -0.5 ? '+ ' : '';
+    return `<th scope="col" class="vs-spalte${i === 0 && !x.verworfen ? ' erste' : ''}${x.verworfen ? ' verworfen' : ''}"><span class="vs-nr">${spaltenName(i)}</span><span class="vs-fig num">${vorzeichen}${euro(Math.abs(x.ersparnis))}</span><span class="vs-lbl">Belastung ${euro(x.ergebnis.erwartet)}${zs === false ? ' · <span class="ziel-nein">Ziel nicht erreicht</span>' : ''}</span></th>`;
   }).join('');
+  // Grund der Verwerfung immer sichtbar, nicht hinter „Steuer, Kosten und Hinweise“
+  const gruendeZeile = anzahlVerworfen
+    ? `<tr class="bs-erg bs-grund"><th scope="row">Verworfen, weil</th>${v.liste.map((x) => `<td>${x.verworfen ? `<ul class="vs-gruende">${x.gruende.map((g) => `<li class="ziel-nein">${esc(g)}</li>`).join('')}</ul>` : '<span class="bs-leer" aria-label="nicht verworfen">–</span>'}</td>`).join('')}</tr>`
+    : '';
   const det = !!state.vsDetails;
   const matrix = `<div class="vs-matrix-wrap"><table class="vs-matrix">
     <thead><tr><td class="vs-ecke">Ersparnis gegenüber ohne Gestaltung (gewichtet)</td>${kopfZellen}</tr></thead>
     <tbody>
-      ${gruppe(n > 1 && gemeinsam.length ? 'In allen Vorschlägen enthalten' : 'Bausteine', gemeinsam.length ? gemeinsam : verschieden)}
+      ${gruppe(n > 1 && gemeinsam.length ? (anzahlVerworfen ? 'In allen Spalten enthalten' : 'In allen Vorschlägen enthalten') : 'Bausteine', gemeinsam.length ? gemeinsam : verschieden)}
       ${gemeinsam.length ? gruppe('Unterschiede', verschieden) : ''}
+      ${gruendeZeile}
       <tr class="bs-zeile"><th scope="row" colspan="${spalten}"><button type="button" class="bs-name" data-act="vs-details" aria-expanded="${det}">${icon(det ? 'chevron-down' : 'chevron-right', 16)}<span>Steuer, Kosten und Hinweise</span></button></th></tr>
       ${det ? `<tr class="bs-erg"><th scope="row">Steuer · Kosten</th>${v.liste.map((x) => `<td class="num">${euro(x.ergebnis.steuer)}<small>Kosten ${euro(x.ergebnis.kosten)}</small></td>`).join('')}</tr>
       <tr class="bs-erg"><th scope="row">Gestaltungsziel</th>${v.liste.map((x) => { const zs = zielStatus(x.ergebnis.ziel); return `<td><span class="${zielKlasse(zs)}">${zs == null ? 'nicht erfasst' : zielText(zs)}</span>${x.ergebnis.risiken ? `<small>${anzahl(x.ergebnis.risiken, 'Risikohinweis', 'Risikohinweise')}</small>` : '<small>keine Risikohinweise</small>'}</td>`; }).join('')}</tr>` : ''}
       <tr class="bs-aktion"><th scope="row"></th>${v.liste.map((x) => `<td>${uebernommen.has(x.id)
         ? aktionsknopf('vorschlag-uebernehmen', 'Übernommen', { cls: 'klein ist-uebernommen', ico: 'check', daten: { id: x.id } }).replace('<button ', '<button aria-pressed="true" title="Erneut antippen: Szenario wieder entfernen" ')
-        : aktionsknopf('vorschlag-uebernehmen', 'Als Szenario übernehmen', { cls: 'primary klein', daten: { id: x.id } }).replace('<button ', '<button aria-pressed="false" ')}</td>`).join('')}</tr>
+        : aktionsknopf('vorschlag-uebernehmen', 'Als Szenario übernehmen', { cls: `${x.verworfen ? '' : 'primary '}klein`, daten: { id: x.id } }).replace('<button ', '<button aria-pressed="false" ')}</td>`).join('')}</tr>
     </tbody></table></div>`;
   return `<section class="vorschlaege">${kopf}${auswahlAssets}${matrix}</section>`;
 }

@@ -17,7 +17,7 @@ test('Mandantenfassung: Beispielfall mit Vorschlägen, ohne interne Hinweise', (
   const fall = beispielfall();
   const v = vorschlaege(fall);
   assert.ok(v.liste.length > 0, 'Beispielfall liefert Vorschläge');
-  for (const x of v.liste.slice(0, 3)) fall.szenarien.push({ ...structuredClone(x.szenario), id: `sz_${x.id}`, name: `Vorschlag: ${x.bausteine.join(', ')}` });
+  for (const x of v.liste.filter((y) => !y.verworfen).slice(0, 3)) fall.szenarien.push({ ...structuredClone(x.szenario), id: `sz_${x.id}`, name: `Vorschlag: ${x.bausteine.join(', ')}` });
   const html = mandantenfassung(fall, ergebnis(fall), { heute: '2026-10-13' });
 
   assert.match(html, /Ohne Gestaltung/);
