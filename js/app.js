@@ -334,6 +334,7 @@ const AKTIONEN = {
     const nb = f.ziel.nebenbedingungen = f.ziel.nebenbedingungen || {};
     nb.nichtUebertragen = d.art === 'immobilien' ? f.vermoegen.filter((a) => a.art !== 'immobilie').map((a) => a.id) : [];
   }),
+  'baustein-umschalten': (d) => { state.offenBs = state.offenBs || {}; state.offenBs[d.id] = !state.offenBs[d.id]; render(); },
   'vorschlaege-umschalten': () => { state.vorschlaegeOffen = state.vorschlaegeOffen === false; render(); },
   'vorschlag-uebernehmen': (d) => {
     const v = vorschlaegeFuer(fall());

@@ -193,7 +193,7 @@ function vorschlagsBereich(f, res) {
   const offen = state.vorschlaegeOffen !== false;
   const kopf = `<div class="vs-kopf">
     <div><h2>Vorschläge des Rechners</h2><p class="muted">${v.liste?.length
-      ? `Aus ${v.gerechnet} geprüften Kombinationen üblicher Gestaltungen. Sortiert zuerst nach Zielerreichung, dann nach Steuern und Kosten (gewichtet)${basis ? `; ohne Gestaltung ${euro(basis.erwartet)}` : ''}.`
+      ? `Aus ${v.gerechnet} geprüften Kombinationen üblicher Gestaltungen. Je Zeile ein Baustein, je Spalte ein Vorschlag; „Übernehmen“ legt den Vorschlag als Szenario an. Sortiert zuerst nach Zielerreichung, dann nach Steuern und Kosten (gewichtet)${basis ? `; ohne Gestaltung ${euro(basis.erwartet)}` : ''}.`
       : 'Keine der geprüften Gestaltungen senkt die Belastung spürbar.'}</p></div>
     ${v.liste?.length ? `<button type="button" class="btn ghost klein" data-act="vorschlaege-umschalten">${offen ? 'Ausblenden' : 'Anzeigen'}</button>` : ''}
   </div>`;
@@ -206,21 +206,38 @@ function vorschlagsBereich(f, res) {
   </div>` : '';
   if (!v.liste?.length || !offen) return `<section class="vorschlaege">${kopf}${auswahlAssets}</section>`;
   const uebernommen = new Set(f.szenarien.map((s) => s.vorschlagId).filter(Boolean));
-  const karten = v.liste.map((x, i) => {
-    const zs = zielStatus(x.ergebnis.ziel);
-    return `<article class="vs-karte${i === 0 ? ' erste' : ''}">
-      <div class="vs-oben">
-        <div><span class="vs-nr">Vorschlag ${i + 1}</span><span class="vs-fig num">− ${euro(x.ersparnis)}</span><span class="vs-lbl">weniger Steuern und Kosten (gewichtet)</span></div>
-      </div>
-      <div class="chips">${x.bausteine.map((b) => `<span class="marke info">${esc(b)}</span>`).join('')}</div>
-      <ul class="vs-texte">${x.texte.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
-      <div class="vs-fuss">
-        <span class="small">Belastung <b class="num">${euro(x.ergebnis.erwartet)}</b> (Steuer ${euro(x.ergebnis.steuer)}, Kosten ${euro(x.ergebnis.kosten)}) · <span class="${zielKlasse(zs)}">${zs == null ? 'kein Ziel erfasst' : `Ziel ${zielText(zs)}`}</span>${x.ergebnis.risiken ? ` · ${anzahl(x.ergebnis.risiken, 'Risikohinweis', 'Risikohinweise')}` : ''}</span>
-        ${uebernommen.has(x.id) ? '<span class="marke gut">übernommen</span>' : aktionsknopf('vorschlag-uebernehmen', 'Als Szenario übernehmen', { cls: 'primary klein', daten: { id: x.id } })}
-      </div>
-    </article>`;
-  }).join('');
-  return `<section class="vorschlaege">${kopf}${auswahlAssets}<div class="vs-raster">${karten}</div>
+  const n = v.liste.length;
+  // Bausteine über alle Vorschläge: gemeinsame zuerst, dann nach Häufigkeit
+  const module = new Map();
+  v.liste.forEach((x, i) => x.module.forEach((m) => {
+    if (!module.has(m.key)) module.set(m.key, { ...m, in: new Set(), pos: module.size });
+    module.get(m.key).in.add(i);
+  }));
+  const reihen = [...module.values()].sort((p, q) => q.in.size - p.in.size || p.pos - q.pos);
+  const gemeinsam = n > 1 ? reihen.filter((m) => m.in.size === n) : [];
+  const verschieden = reihen.filter((m) => !gemeinsam.includes(m));
+  const offenBs = state.offenBs || {};
+  const spalten = n + 1;
+  const bausteinZeile = (m) => {
+    const offen = !!offenBs[m.key];
+    return `<tr class="bs-zeile${offen ? ' offen' : ''}">
+      <th scope="row"><button type="button" class="bs-name" data-act="baustein-umschalten" data-id="${m.key}" aria-expanded="${offen}">${icon(offen ? 'chevron-down' : 'chevron-right', 16)}<span>${esc(m.titel)}</span></button></th>
+      ${v.liste.map((_, i) => `<td class="bs-zelle">${m.in.has(i) ? '<span class="bs-punkt" role="img" aria-label="enthalten"></span>' : '<span class="bs-leer" aria-label="nicht enthalten">–</span>'}</td>`).join('')}
+    </tr>${offen ? `<tr class="bs-text"><td colspan="${spalten}"><ul>${m.texte.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></td></tr>` : ''}`;
+  };
+  const gruppe = (titel, liste) => (liste.length ? `<tr class="bs-gruppe"><th colspan="${spalten}">${titel}</th></tr>${liste.map(bausteinZeile).join('')}` : '');
+  const kopfZellen = v.liste.map((x, i) => `<th scope="col" class="vs-spalte${i === 0 ? ' erste' : ''}"><span class="vs-nr">Vorschlag ${i + 1}</span><span class="vs-fig num">− ${euro(x.ersparnis)}</span><span class="vs-lbl">weniger Steuern und Kosten</span></th>`).join('');
+  const matrix = `<div class="vs-matrix-wrap"><table class="vs-matrix">
+    <thead><tr><td class="vs-ecke">Ersparnis gegenüber ohne Gestaltung (gewichtet)</td>${kopfZellen.replace(/<th /g, '<th ')}</tr></thead>
+    <tbody>
+      ${gruppe(n > 1 && gemeinsam.length ? 'In allen Vorschlägen enthalten' : 'Bausteine', gemeinsam.length ? gemeinsam : verschieden)}
+      ${gemeinsam.length ? gruppe('Unterschiede', verschieden) : ''}
+      <tr class="bs-gruppe"><th colspan="${spalten}">Ergebnis</th></tr>
+      <tr class="bs-erg"><th scope="row">Steuern und Kosten</th>${v.liste.map((x) => `<td class="num">${euro(x.ergebnis.erwartet)}<small>Steuer ${euro(x.ergebnis.steuer)} · Kosten ${euro(x.ergebnis.kosten)}</small></td>`).join('')}</tr>
+      <tr class="bs-erg"><th scope="row">Ziel</th>${v.liste.map((x) => { const zs = zielStatus(x.ergebnis.ziel); return `<td><span class="${zielKlasse(zs)}">${zs == null ? 'kein Ziel erfasst' : zielText(zs)}</span>${x.ergebnis.risiken ? `<small>${anzahl(x.ergebnis.risiken, 'Risikohinweis', 'Risikohinweise')}</small>` : ''}</td>`; }).join('')}</tr>
+      <tr class="bs-aktion"><th scope="row"></th>${v.liste.map((x) => `<td>${uebernommen.has(x.id) ? '<span class="marke gut">übernommen</span>' : aktionsknopf('vorschlag-uebernehmen', 'Übernehmen', { cls: 'primary klein', daten: { id: x.id } })}</td>`).join('')}</tr>
+    </tbody></table></div>`;
+  return `<section class="vorschlaege">${kopf}${auswahlAssets}${matrix}
     <p class="small muted" style="margin-top:10px">Vorschläge beruhen auf den erfassten Werten und Annahmen. Zivilrechtliche Folgen, Pflichtteilsrechte und die Interessen der Beteiligten sind gesondert zu prüfen.</p></section>`;
 }
 

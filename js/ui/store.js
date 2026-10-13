@@ -13,6 +13,7 @@ export const state = {
   detail: { szenarioId: null, reihenfolge: 'gewichtet', tab: 'zeitachse', offen: {} },
   sheet: null,
   offenSz: {},
+  offenBs: {},
   szReihenfolge: null,
   vorschlaegeOffen: true,
   speicherFehler: false

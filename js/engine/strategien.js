@@ -367,6 +367,7 @@ export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
       id: e.sz.id,
       titel: e.sz.name,
       bausteine: e.teile.map((b) => b.titel),
+      module: e.teile.map((b) => ({ key: b.key, titel: b.titel, texte: b.texte })),
       texte: e.teile.flatMap((b) => b.texte),
       szenario: e.sz,
       ergebnis: voll,
