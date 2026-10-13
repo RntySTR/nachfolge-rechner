@@ -223,7 +223,7 @@ export function ansichtZiel(f) {
     }).join('') : `<div class="leer"><h3>Noch keine Vermögenswerte</h3><p>Erfassen Sie zuerst das Vermögen, dann die gewünschte Verteilung.</p>${aktionsknopf('nav', 'Zum Vermögen', { daten: { ziel: 'vermoegen' } })}</div>`;
   }
   return `
-    ${seitenkopf({ schritt: 'Schritt 4 von 6', titel: 'Ziel', lead: 'Bei wem soll das Vermögen am Ende liegen? Der Vergleich prüft für jedes Szenario, ob dieses Ziel erreicht wird.', aktionen: segment('ziel.modus', z.modus || 'asset', [['asset', 'Je Vermögenswert'], ['quote', 'Nach Quoten']]) })}
+    ${seitenkopf({ schritt: 'Schritt 4 von 6', titel: 'Gestaltungsziel', lead: 'Bei wem soll das Vermögen am Ende liegen? Die Zusammenfassung prüft für jedes Szenario, ob dieses Ziel erreicht wird.', aktionen: segment('ziel.modus', z.modus || 'asset', [['asset', 'Je Vermögenswert'], ['quote', 'Nach Quoten']]) })}
     <div class="raster" style="gap:16px">${inhalt}</div>
     <section class="abschnitt">
       <h2>Rahmenbedingungen</h2>

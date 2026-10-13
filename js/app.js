@@ -13,9 +13,9 @@ const ANSICHTEN = [
   ['familie', 'Familie', 'users', ansichtFamilie],
   ['vermoegen', 'Vermögen', 'wallet', ansichtVermoegen],
   ['ausgangslage', 'Ausgangslage', 'scale', ansichtAusgangslage],
-  ['ziel', 'Ziel', 'target', ansichtZiel],
+  ['ziel', 'Gestaltungsziel', 'target', ansichtZiel],
   ['szenarien', 'Szenarien', 'route', ansichtSzenarien],
-  ['vergleich', 'Vergleich', 'git-compare-arrows', ansichtVergleich]
+  ['vergleich', 'Zusammenfassung', 'git-compare-arrows', ansichtVergleich]
 ];
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -339,6 +339,16 @@ const AKTIONEN = {
   'vorschlag-uebernehmen': (d) => {
     const v = vorschlaegeFuer(fall());
     const x = v.liste?.find((y) => y.id === d.id);
+    const vorhanden = fall().szenarien.find((s) => s.vorschlagId === d.id);
+    if (vorhanden) {
+      aendern((f) => {
+        f.szenarien = f.szenarien.filter((s) => s.vorschlagId !== d.id);
+        if (state.szenarioId === vorhanden.id) state.szenarioId = f.szenarien[0]?.id ?? null;
+        if (state.detail.szenarioId === vorhanden.id) state.detail.szenarioId = null;
+      });
+      toast('Szenario wieder entfernt');
+      return;
+    }
     if (!x) return;
     aendern((f) => {
       const sz = tiefeKopie(x.szenario);

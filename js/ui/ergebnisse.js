@@ -1,4 +1,4 @@
-// Ansichten 5 und 6: Szenarien und Vergleich. Berechnung mit Zwischenspeicher.
+// Ansichten 5 und 6: Szenarien und Zusammenfassung. Berechnung mit Zwischenspeicher.
 
 import { esc, euro, quote, datum, prozent, anzahl } from './format.js';
 import { icon } from './icons.js';
@@ -172,7 +172,7 @@ function belastungBlock(f, r, { vergleich = null } = {}) {
   return `<div class="belastung">
     <div class="bl-kopf">
       <div><span class="lbl">Steuern und Kosten, gewichtet</span><span class="fig num">${euro(r.erwartet)}</span>${diff != null ? `<span class="small ${diff > 0 ? 'ziel-ok' : 'ziel-nein'}">${diff > 0 ? '− ' : '+ '}${euro(Math.abs(diff))} gegenüber ohne Gestaltung</span>` : ''}</div>
-      <div style="text-align:right"><span class="lbl">Ziel</span><span class="${zielKlasse(zs)}" style="display:block;font:500 18px/1.2 var(--font-display);margin-top:6px">${zielText(zs)}</span></div>
+      <div style="text-align:right"><span class="lbl">Gestaltungsziel</span><span class="${zielKlasse(zs)}" style="display:block;font:500 18px/1.2 var(--font-display);margin-top:6px">${zielText(zs)}</span></div>
     </div>
     ${werte.length ? `<div class="bl-zeilen">${werte.map((p) => `<div class="bl-zeile"><span>${esc(p.t)}</span><span class="bl-balken"><span class="${p.fam}" style="width:${Math.max(1.5, (p.w / max) * 100)}%"></span></span><b class="num">${euro(p.w)}</b></div>`).join('')}</div>` : '<p class="muted" style="margin-top:12px">Weder Steuern noch Kosten.</p>'}
     <p class="small muted" style="margin-top:12px">${r.laeufe.map((l) => `${esc(laufLabel(f, l))}: ${euro(l.summen.belastung)}`).join(' · ')}${r.laeufe.length > 1 ? ' – gewichtet nach der statistischen Wahrscheinlichkeit der Sterbereihenfolge; Tod jeweils bei statistischer Lebenserwartung, ohne Abzinsung.' : ''}</p>
@@ -193,7 +193,7 @@ function vorschlagsBereich(f, res) {
   const offen = state.vorschlaegeOffen !== false;
   const kopf = `<div class="vs-kopf">
     <div><h2>Vorschläge des Rechners</h2><p class="muted">${v.liste?.length
-      ? `Aus ${v.gerechnet} geprüften Kombinationen üblicher Gestaltungen. Je Zeile ein Baustein, je Spalte ein Vorschlag; „Übernehmen“ legt den Vorschlag als Szenario an. Sortiert zuerst nach Zielerreichung, dann nach Steuern und Kosten (gewichtet)${basis ? `; ohne Gestaltung ${euro(basis.erwartet)}` : ''}.`
+      ? `Aus ${v.gerechnet} geprüften Kombinationen üblicher Gestaltungen. Je Zeile ein Baustein, je Spalte ein Vorschlag. Sortiert zuerst nach Zielerreichung, dann nach Steuern und Kosten (gewichtet)${basis ? `; ohne Gestaltung ${euro(basis.erwartet)}` : ''}.`
       : 'Keine der geprüften Gestaltungen senkt die Belastung spürbar.'}</p></div>
     ${v.liste?.length ? `<button type="button" class="btn ghost klein" data-act="vorschlaege-umschalten">${offen ? 'Ausblenden' : 'Anzeigen'}</button>` : ''}
   </div>`;
@@ -234,10 +234,13 @@ function vorschlagsBereich(f, res) {
       ${gemeinsam.length ? gruppe('Unterschiede', verschieden) : ''}
       <tr class="bs-gruppe"><th colspan="${spalten}">Ergebnis</th></tr>
       <tr class="bs-erg"><th scope="row">Steuern und Kosten</th>${v.liste.map((x) => `<td class="num">${euro(x.ergebnis.erwartet)}<small>Steuer ${euro(x.ergebnis.steuer)} · Kosten ${euro(x.ergebnis.kosten)}</small></td>`).join('')}</tr>
-      <tr class="bs-erg"><th scope="row">Ziel</th>${v.liste.map((x) => { const zs = zielStatus(x.ergebnis.ziel); return `<td><span class="${zielKlasse(zs)}">${zs == null ? 'kein Ziel erfasst' : zielText(zs)}</span>${x.ergebnis.risiken ? `<small>${anzahl(x.ergebnis.risiken, 'Risikohinweis', 'Risikohinweise')}</small>` : ''}</td>`; }).join('')}</tr>
-      <tr class="bs-aktion"><th scope="row"></th>${v.liste.map((x) => `<td>${uebernommen.has(x.id) ? '<span class="marke gut">übernommen</span>' : aktionsknopf('vorschlag-uebernehmen', 'Übernehmen', { cls: 'primary klein', daten: { id: x.id } })}</td>`).join('')}</tr>
+      <tr class="bs-erg"><th scope="row">Gestaltungsziel</th>${v.liste.map((x) => { const zs = zielStatus(x.ergebnis.ziel); return `<td><span class="${zielKlasse(zs)}">${zs == null ? 'kein Gestaltungsziel erfasst' : zielText(zs)}</span>${x.ergebnis.risiken ? `<small>${anzahl(x.ergebnis.risiken, 'Risikohinweis', 'Risikohinweise')}</small>` : ''}</td>`; }).join('')}</tr>
+      <tr class="bs-aktion"><th scope="row"></th>${v.liste.map((x) => `<td>${uebernommen.has(x.id)
+        ? aktionsknopf('vorschlag-uebernehmen', 'Übernommen', { cls: 'klein ist-uebernommen', ico: 'check', daten: { id: x.id } }).replace('<button ', '<button aria-pressed="true" title="Erneut anklicken: Szenario wieder entfernen" ')
+        : aktionsknopf('vorschlag-uebernehmen', 'Als Szenario übernehmen', { cls: 'primary klein', daten: { id: x.id } }).replace('<button ', '<button aria-pressed="false" ')}</td>`).join('')}</tr>
     </tbody></table></div>`;
   return `<section class="vorschlaege">${kopf}${auswahlAssets}${matrix}
+    <p class="small muted" style="margin-top:10px"><b>Als Szenario übernehmen</b> legt den Vorschlag als eigenes Szenario in der Szenarienliste an und nimmt ihn in die Zusammenfassung (Schritt 6) auf. „Übernommen“ erneut anklicken entfernt dieses Szenario wieder; Änderungen daran gehen dabei verloren.</p>
     <p class="small muted" style="margin-top:10px">Vorschläge beruhen auf den erfassten Werten und Annahmen. Zivilrechtliche Folgen, Pflichtteilsrechte und die Interessen der Beteiligten sind gesondert zu prüfen.</p></section>`;
 }
 
@@ -345,7 +348,7 @@ function annahmeText(f) {
 export function ansichtVergleich(f) {
   const res = ergebnisse(f);
   const kopf = seitenkopf({
-    schritt: 'Schritt 6 von 6', titel: 'Vergleich',
+    schritt: 'Schritt 6 von 6', titel: 'Zusammenfassung',
     lead: 'Erbschaft- und Schenkungsteuer sowie Notar- und Grundbuchkosten je Szenario, über beide Sterbereihenfolgen gewichtet.',
     aktionen: `${aktionsknopf('drucken-mandant', 'Mandantenfassung (PDF/Druck)', { ico: 'printer', cls: 'primary' })}${aktionsknopf('drucken', 'Interne Ansicht drucken', { ico: 'printer' })}`
   });
@@ -399,7 +402,7 @@ export function ansichtVergleich(f) {
       <div class="sa-plot"><span class="sa-wert num">${euro(r.erwartet)}</span>
         <div class="sa-stapel" style="height:${hoehe(r.erwartet)}">${reihen.map(([k, c]) => (r[k] > 0 ? `<span class="${c}" style="flex-grow:${r[k]}"></span>` : '')).join('')}</div>
         <div class="sa-tip" role="tooltip"><b class="num">${euro(r.erwartet)}</b>${tip || '<span>Keine Steuern und Kosten</span>'}</div></div>
-      <div class="sa-name">${esc(r.sz.name)}<small><span class="${zielKlasse(zielOk)}">${zielOk == null ? 'Kein Ziel erfasst' : `Ziel ${zielText(zielOk)}`}</span>${r.risiken ? ` · ${anzahl(r.risiken, 'Risikohinweis', 'Risikohinweise')}` : ''}</small></div>
+      <div class="sa-name">${esc(r.sz.name)}<small><span class="${zielKlasse(zielOk)}">${zielOk == null ? 'Kein Gestaltungsziel erfasst' : `Gestaltungsziel ${zielText(zielOk)}`}</span>${r.risiken ? ` · ${anzahl(r.risiken, 'Risikohinweis', 'Risikohinweise')}` : ''}</small></div>
     </button>`;
   }).join('');
 
@@ -425,7 +428,7 @@ function detail(f, res, id) {
   const tab = state.detail.tab || 'zeitachse';
   const z = zielabgleich(f, lauf);
   const hinweise = lauf.hinweise.slice().sort((a, b) => rang(a.stufe) - rang(b.stufe));
-  const tabs = [['zeitachse', 'Ablauf'], ['erwerbe', 'Steuer je Erwerb'], ['kosten', 'Kosten'], ['hinweise', `Hinweise (${hinweise.length})`], ['ziel', 'Ziel']];
+  const tabs = [['zeitachse', 'Ablauf'], ['erwerbe', 'Steuer je Erwerb'], ['kosten', 'Kosten'], ['hinweise', `Hinweise (${hinweise.length})`], ['ziel', 'Gestaltungsziel']];
 
   let inhalt = '';
   if (tab === 'zeitachse') {
@@ -465,7 +468,7 @@ function detail(f, res, id) {
       ${r.laeufe.length > 1 ? `<div class="seg" role="group">${r.laeufe.map((l) => `<button type="button" data-act="reihenfolge" data-id="${l.erstversterbender}" aria-pressed="${l === lauf}">${esc(laufLabel(f, l))} · ${prozent(r.gewichte[r.laeufe.indexOf(l)])}</button>`).join('')}</div><span class="small muted">Prozent = statistische Wahrscheinlichkeit der Reihenfolge</span>` : ''}
     </div>
     <div class="kacheln">${postenWerte(lauf.summen).filter((p) => p.w >= 0.5).map((p) => `<div class="kachel"><span class="lbl">${esc(p.t)}</span><span class="fig num">${euro(p.w)}</span></div>`).join('') || '<div class="kachel"><span class="lbl">Steuern und Kosten</span><span class="fig num">0 €</span></div>'}
-      <div class="kachel"><span class="lbl">Ziel</span><span class="fig ${zielKlasse(zielOk)}" style="font-size:22px">${zielText(zielOk)}</span></div>
+      <div class="kachel"><span class="lbl">Gestaltungsziel</span><span class="fig ${zielKlasse(zielOk)}" style="font-size:22px">${zielText(zielOk)}</span></div>
     </div>
     <div class="seg" role="tablist" style="margin-bottom:18px">${tabs.map(([k, t]) => `<button type="button" role="tab" data-act="tab" data-id="${k}" aria-pressed="${k === tab}">${esc(t)}</button>`).join('')}</div>
     ${inhalt}
@@ -509,7 +512,7 @@ export function kostenDetail(k) {
 }
 
 function zielTabelle(f, z) {
-  if (!z.zeilen.length) return '<p class="muted">Kein Ziel erfasst. Unter „Ziel“ lässt sich festlegen, bei wem das Vermögen am Ende liegen soll.</p>';
+  if (!z.zeilen.length) return '<p class="muted">Kein Gestaltungsziel erfasst. Unter „Gestaltungsziel“ lässt sich festlegen, bei wem das Vermögen am Ende liegen soll.</p>';
   if (z.modus === 'quote') {
     return `<table class="tabelle"><thead><tr><th>Person</th><th class="r">Soll</th><th class="r">Ist</th><th></th></tr></thead><tbody>${z.zeilen.map((r) => `<tr><td>${esc(nameVon(f, r.personId))}</td><td class="r num">${prozent(r.soll, 1)}</td><td class="r num">${prozent(r.ist, 1)}</td><td>${r.ok ? icon('circle-check', 18, 'ziel-ok') : icon('circle-x', 18, 'ziel-nein')}</td></tr>`).join('')}</tbody></table>`;
   }

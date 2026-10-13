@@ -77,7 +77,7 @@ function uebersicht(res, basis, beste) {
   }).join('');
   return `<section class="dr-block">
     <h2>Ergebnis im Überblick</h2>
-    <table class="dr-tab"><thead><tr><th>Gestaltung</th><th class="r">Steuern und Kosten</th><th class="r">gegenüber ohne Gestaltung</th><th class="r">Ziel</th></tr></thead><tbody>${zeilen}</tbody></table>
+    <table class="dr-tab"><thead><tr><th>Gestaltung</th><th class="r">Steuern und Kosten</th><th class="r">gegenüber ohne Gestaltung</th><th class="r">Gestaltungsziel</th></tr></thead><tbody>${zeilen}</tbody></table>
     <p class="dr-klein">Steuern und Kosten bis zum Übergang auf die nächste Generation, über beide Sterbereihenfolgen nach ihrer statistischen Wahrscheinlichkeit gewichtet.</p>
   </section>`;
 }
