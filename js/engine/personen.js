@@ -140,10 +140,7 @@ export function versorgungsfreibetrag(fall, erblasserId, anId, stichtag) {
   const pm = personMap(fall);
   const an = pm.get(anId);
   if (!an) return 0;
-  if (ehegatte(fall, erblasserId) === anId) {
-    const kuerzung = Number(fall.versorgungsbezuege?.[slotVon(fall, anId)] || 0);
-    return Math.max(0, R.versorgungsfreibetrag.ehegatte - kuerzung);
-  }
+  if (ehegatte(fall, erblasserId) === anId) return R.versorgungsfreibetrag.ehegatte;
   if (an.rolle === 'kind') {
     const a = alter(an.geburt, stichtag);
     if (a == null) return 0;

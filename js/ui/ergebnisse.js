@@ -1,6 +1,6 @@
 // Ansichten 5 und 6: Szenarien und Vergleich. Berechnung mit Zwischenspeicher.
 
-import { esc, euro, quote, datum, prozent } from './format.js';
+import { esc, euro, quote, datum, prozent, anzahl } from './format.js';
 import { icon } from './icons.js';
 import {
   avatar, nameVon, seitenkopf, segment, schalter, aktionsknopf, hinweisBox, textfeld, zahlfeld, assetIcon
@@ -97,7 +97,7 @@ export function ansichtSzenarien(f) {
     const r = ergebnisVon(s);
     return `<button type="button" class="sz-karte" data-act="szenario-waehlen" data-id="${s.id}" aria-current="${s.id === aktuell?.id}">
       <span class="nm">${esc(s.name || 'Ohne Namen')}</span>
-      <span class="kz"><span>${s.schritte.length} Schritt${s.schritte.length === 1 ? '' : 'e'}</span><b>${r && !r.fehler ? euro(r.erwartet) : '–'}</b></span>
+      <span class="kz"><span>${anzahl(s.schritte.length, 'Schritt', 'Schritte', 'm')}</span><b>${r && !r.fehler ? euro(r.erwartet) : '–'}</b></span>
     </button>`;
   }).join('');
 
@@ -115,7 +115,7 @@ export function ansichtSzenarien(f) {
           <h2 style="margin-bottom:6px">Nach dem ersten Erbfall</h2>
           <p class="muted" style="margin-bottom:14px">Gestaltungen, die erst nach dem Tod des Erstversterbenden ausgeübt werden.</p>
           <div class="flaeche raster">
-            ${f.geber.b ? schalter(`szenarien.${idx}.erbfallOptionen.ausschlagungEhegatte`, opt.ausschlagungEhegatte, 'Der überlebende Ehegatte schlägt aus', 'Güterrechtliche Lösung: tatsächlicher Zugewinnausgleich steuerfrei plus kleiner Pflichtteil (§ 1371 Abs. 3 BGB, § 5 Abs. 2 ErbStG). Ausschlagung binnen 6 Wochen (§ 1944 BGB). Annahme: Die Schlusserben sind Ersatzerben.') : ''}
+            ${f.geber.b ? schalter(`szenarien.${idx}.erbfallOptionen.ausschlagungEhegatte`, opt.ausschlagungEhegatte, 'Der überlebende Ehegatte schlägt aus', 'Güterrechtliche Lösung: tatsächlicher Zugewinnausgleich steuerfrei plus kleiner Pflichtteil (§ 1371 Abs. 3 BGB, § 5 Abs. 2 ErbStG). Ausschlagung binnen sechs Wochen (§ 1944 BGB). Annahme: Die Schlusserben sind Ersatzerben.') : ''}
             <div class="feld"><div class="lbl">Pflichtteil wird geltend gemacht von</div>
               <div class="chips">${kinder.map((p) => `<button type="button" class="chip" data-toggle-liste="szenarien.${idx}.erbfallOptionen.pflichtteil" data-wert="${p.id}" aria-pressed="${(opt.pflichtteil || []).includes(p.id)}">${avatar(f, p.id)}${esc(nameVon(f, p.id))}</button>`).join('')}</div>
               <div class="hilfe">Nutzt den Freibetrag gegenüber dem Erstversterbenden. Die Pflichtteilsstrafklausel darf nur bei Geltendmachung gegen den Willen des Längerlebenden greifen; Geltendmachung innerhalb der Verjährung.</div></div>
@@ -175,7 +175,7 @@ function belastungBlock(f, r, { vergleich = null } = {}) {
       <div style="text-align:right"><span class="lbl">Ziel</span><span class="${zielKlasse(zs)}" style="display:block;font:500 18px/1.2 var(--font-display);margin-top:6px">${zielText(zs)}</span></div>
     </div>
     ${werte.length ? `<div class="bl-zeilen">${werte.map((p) => `<div class="bl-zeile"><span>${esc(p.t)}</span><span class="bl-balken"><span class="${p.fam}" style="width:${Math.max(1.5, (p.w / max) * 100)}%"></span></span><b class="num">${euro(p.w)}</b></div>`).join('')}</div>` : '<p class="muted" style="margin-top:12px">Weder Steuern noch Kosten.</p>'}
-    <p class="small muted" style="margin-top:12px">${r.laeufe.map((l) => `${esc(laufLabel(f, l))}: ${euro(l.summen.belastung)}`).join(' · ')}${r.laeufe.length > 1 ? ' – gewichtet nach der Wahrscheinlichkeit der Sterbereihenfolge; Tod jeweils bei statistischer Lebenserwartung, ohne Abzinsung.' : ''}</p>
+    <p class="small muted" style="margin-top:12px">${r.laeufe.map((l) => `${esc(laufLabel(f, l))}: ${euro(l.summen.belastung)}`).join(' · ')}${r.laeufe.length > 1 ? ' – gewichtet nach der statistischen Wahrscheinlichkeit der Sterbereihenfolge; Tod jeweils bei statistischer Lebenserwartung, ohne Abzinsung.' : ''}</p>
   </div>`;
 }
 
@@ -215,7 +215,7 @@ function vorschlagsBereich(f, res) {
       <div class="chips">${x.bausteine.map((b) => `<span class="marke info">${esc(b)}</span>`).join('')}</div>
       <ul class="vs-texte">${x.texte.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
       <div class="vs-fuss">
-        <span class="small">Belastung <b class="num">${euro(x.ergebnis.erwartet)}</b> (Steuer ${euro(x.ergebnis.steuer)}, Kosten ${euro(x.ergebnis.kosten)}) · <span class="${zielKlasse(zs)}">${zs == null ? 'kein Ziel erfasst' : `Ziel ${zielText(zs)}`}</span>${x.ergebnis.risiken ? ` · ${x.ergebnis.risiken} Risikohinweis${x.ergebnis.risiken > 1 ? 'e' : ''}` : ''}</span>
+        <span class="small">Belastung <b class="num">${euro(x.ergebnis.erwartet)}</b> (Steuer ${euro(x.ergebnis.steuer)}, Kosten ${euro(x.ergebnis.kosten)}) · <span class="${zielKlasse(zs)}">${zs == null ? 'kein Ziel erfasst' : `Ziel ${zielText(zs)}`}</span>${x.ergebnis.risiken ? ` · ${anzahl(x.ergebnis.risiken, 'Risikohinweis', 'Risikohinweise')}` : ''}</span>
         ${uebernommen.has(x.id) ? '<span class="marke gut">übernommen</span>' : aktionsknopf('vorschlag-uebernehmen', 'Als Szenario übernehmen', { cls: 'primary klein', daten: { id: x.id } })}
       </div>
     </article>`;
@@ -229,7 +229,7 @@ function vorschlagsBereich(f, res) {
 function reihenfolgeWahl(f, r) {
   if (!r?.laeufe || r.laeufe.length < 2) return '';
   const aktiv = gewaehlterLauf(r);
-  return `<div class="seg" role="group">${r.laeufe.map((l, i) => `<button type="button" data-act="sz-reihenfolge" data-id="${l.erstversterbender}" aria-pressed="${l === aktiv}">${esc(laufLabel(f, l))} (${prozent(r.gewichte[i])})</button>`).join('')}</div>`;
+  return `<div class="seg" role="group">${r.laeufe.map((l, i) => `<button type="button" data-act="sz-reihenfolge" data-id="${l.erstversterbender}" aria-pressed="${l === aktiv}">${esc(laufLabel(f, l))} · ${prozent(r.gewichte[i])}</button>`).join('')}</div><p class="small muted" style="margin-top:6px">Prozentangabe: statistische Wahrscheinlichkeit der Sterbereihenfolge (Sterbetafel).</p>`;
 }
 
 function gewaehlterLauf(r) {
@@ -351,7 +351,7 @@ export function ansichtVergleich(f) {
         const sl = p.id === f.geber.a ? 'a' : 'b';
         return `<div style="width:170px">${zahlfeld(`${nameVon(f, p.id)}: Jahre bis Erbfall`, `annahmen.jahre.${sl}`, an.jahre?.[sl] ?? standardJahre(f, p), { einheit: 'J.' })}</div>`;
       }).join('') : ''}
-      <span class="small muted" style="flex-basis:100%">${esc(todesText)}${g2 && modus !== 'manuell' ? ` · Wahrscheinlichkeit, dass ${esc(nameVon(f, g1.id))} zuerst stirbt: ${prozent(res.pErster)}` : ''}</span>
+      <span class="small muted" style="flex-basis:100%">${esc(todesText)}${g2 && modus !== 'manuell' ? ` · statistische Wahrscheinlichkeit, dass ${esc(nameVon(f, g1.id))} zuerst stirbt: ${prozent(res.pErster)}` : ''}</span>
     </div>`;
 
   const hero = basis ? `
@@ -365,20 +365,39 @@ export function ansichtVergleich(f) {
   const detailId = state.detail.szenarioId && res.szenarien.some((r) => r.sz.id === state.detail.szenarioId) ? state.detail.szenarioId : (beste || basis)?.sz.id;
   state.detail.szenarioId = detailId;
 
-  const zeilen = res.szenarien.map((r) => {
-    if (r.fehler) return `<div class="vg-zeile"><div class="nm">${esc(r.sz.name)}<small class="ziel-nein">${esc(r.fehler)}</small></div><div></div><div></div></div>`;
+  const gueltigeZeilen = res.szenarien;
+  const schritt = (() => { const roh = max / 4; const z = 10 ** Math.floor(Math.log10(roh)); const m = roh / z; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * z; })();
+  const obergrenze = Math.max(schritt, Math.ceil(max / schritt) * schritt);
+  const ticks = [];
+  for (let t = 0; t <= obergrenze + 1e-6; t += schritt) ticks.push(t);
+  const kurz = (x) => (x >= 1000 ? `${String(Math.round(x / 100) / 10).replace('.', ',')} Tsd. €` : `${x} €`);
+  const hoehe = (x) => `${(Math.max(0, x) / obergrenze) * 100}%`;
+  const reihen = [['steuerLebzeiten', 'l', 'Steuer zu Lebzeiten'], ['steuerErbfaelle', 'e', 'Steuer in den Erbfällen'], ['kosten', 'k', 'Notar-, Grundbuch- und Nachlassgerichtskosten']];
+  const saeulen = gueltigeZeilen.map((r) => {
+    if (r.fehler) return `<div class="saeule fehler"><div class="sa-plot"></div><div class="sa-name">${esc(r.sz.name)}<small class="ziel-nein">${esc(r.fehler)}</small></div></div>`;
     const zielOk = zielStatus(r.ziel);
-    const w = (x) => `${(Math.max(0, x) / max) * 100}%`;
-    return `<button type="button" class="vg-zeile${r === beste && basis && beste.erwartet < basis.erwartet ? ' beste' : ''}" data-act="detail-waehlen" data-id="${r.sz.id}" aria-current="${r.sz.id === detailId}" style="text-align:left;border:0;font:inherit">
-      <div class="nm">${esc(r.sz.name)}<small><span class="${zielKlasse(zielOk)}">${zielOk == null ? 'Kein Ziel erfasst' : `Ziel ${zielText(zielOk)}`}</span>${r.risiken ? ` · ${r.risiken} Risiko${r.risiken > 1 ? 'hinweise' : 'hinweis'}` : ''}</small></div>
-      <div class="stapel" title="${esc(postenWerte(r).filter((p) => p.w >= 0.5).map((p) => `${p.t} ${euro(p.w)}`).join(', '))}"><span class="l" style="width:${w(r.steuerLebzeiten)}"></span><span class="e" style="width:${w(r.steuerErbfaelle)}"></span><span class="k" style="width:${w(r.kosten)}"></span></div>
-      <div class="betrag num">${euro(r.erwartet)}<small>${r.laeufe.map((l) => `${esc(nameVon(f, l.erstversterbender))} zuerst ${euro(l.summen.belastung)}`).join('<br>')}</small></div>
+    const ist = r === beste && basis && beste.erwartet < basis.erwartet;
+    const tip = postenWerte(r).filter((p) => p.w >= 0.5).map((p) => `<span>${esc(p.t)}<b>${euro(p.w)}</b></span>`).join('');
+    return `<button type="button" class="saeule${ist ? ' beste' : ''}" data-act="detail-waehlen" data-id="${r.sz.id}" aria-current="${r.sz.id === detailId}" aria-label="${esc(r.sz.name)}: ${euro(r.erwartet)}">
+      <div class="sa-plot"><span class="sa-wert num">${euro(r.erwartet)}</span>
+        <div class="sa-stapel" style="height:${hoehe(r.erwartet)}">${reihen.map(([k, c]) => (r[k] > 0 ? `<span class="${c}" style="flex-grow:${r[k]}"></span>` : '')).join('')}</div>
+        <div class="sa-tip" role="tooltip"><b class="num">${euro(r.erwartet)}</b>${tip || '<span>Keine Steuern und Kosten</span>'}</div></div>
+      <div class="sa-name">${esc(r.sz.name)}<small><span class="${zielKlasse(zielOk)}">${zielOk == null ? 'Kein Ziel erfasst' : `Ziel ${zielText(zielOk)}`}</span>${r.risiken ? ` · ${anzahl(r.risiken, 'Risikohinweis', 'Risikohinweise')}` : ''}</small></div>
     </button>`;
   }).join('');
 
-  const legende = `<div class="legende" style="margin-top:12px"><span class="eintrag"><span class="punkt" style="background:var(--p4)"></span>Steuer zu Lebzeiten</span><span class="eintrag"><span class="punkt" style="background:var(--brand)"></span>Steuer in den Erbfällen</span><span class="eintrag"><span class="punkt" style="background:var(--p2)"></span>Notar-, Grundbuch- und Nachlassgerichtskosten</span></div>`;
+  const legende = `<div class="legende" style="margin-top:12px"><span class="eintrag"><span class="punkt" style="background:var(--p3)"></span>Steuer zu Lebzeiten</span><span class="eintrag"><span class="punkt" style="background:var(--brand)"></span>Steuer in den Erbfällen</span><span class="eintrag"><span class="punkt" style="background:var(--p2)"></span>Notar-, Grundbuch- und Nachlassgerichtskosten</span></div>`;
 
-  return `${kopf}${annahmen}${hero}<div class="vergleich">${zeilen}</div>${legende}${detail(f, res, detailId)}
+  const diagramm = `<div class="diagramm" role="group" aria-label="Steuern und Kosten je Szenario">
+    <div class="sa-achse">${ticks.slice().reverse().map((t) => `<span style="bottom:${(t / obergrenze) * 100}%">${kurz(t)}</span>`).join('')}</div>
+    <div class="sa-raster">${ticks.map((t) => `<i style="bottom:${(t / obergrenze) * 100}%"></i>`).join('')}</div>
+    <div class="sa-reihe">${saeulen}</div>
+  </div>${legende}
+  <details class="sa-tabelle"><summary>Als Tabelle anzeigen</summary>
+    <table class="tabelle"><thead><tr><th>Szenario</th>${reihen.map(([, , t]) => `<th class="r">${esc(t)}</th>`).join('')}<th class="r">Gesamt</th></tr></thead><tbody>${gueltigeZeilen.filter((r) => !r.fehler).map((r) => `<tr><td>${esc(r.sz.name)}</td>${reihen.map(([k]) => `<td class="r num">${euro(r[k])}</td>`).join('')}<td class="r num"><b>${euro(r.erwartet)}</b></td></tr>`).join('')}</tbody></table>
+  </details>`;
+
+  return `${kopf}${annahmen}${hero}${diagramm}${detail(f, res, detailId)}
     <p class="small muted" style="margin-top:32px;max-width:760px">Rechtsstand ${datum(RECHTSSTAND.stand)}. ${RECHTSSTAND.hinweise.map(esc).join(' ')} Überschlägige Berechnung; keine Einzelfallprüfung. Steuerwerte von Grundbesitz sind Eingaben, keine Bedarfsbewertung.</p>`;
 }
 
@@ -402,7 +421,7 @@ function detail(f, res, id) {
     inhalt = `<div class="tabellen-wrap"><table class="tabelle"><thead><tr><th>Datum</th><th>Erwerb</th><th class="r">Bereicherung</th><th class="r">Freibetrag</th><th class="r">Steuerpflichtig</th><th class="r">Satz</th><th class="r">Steuer</th></tr></thead><tbody>
       ${lauf.erwerbe.map((e) => {
         const offen = state.detail.offen?.[e.id];
-        return `<tr class="klickbar" data-act="erwerb-umschalten" data-id="${e.id}"><td class="num">${datum(e.datum)}</td><td><b style="font-weight:500;color:var(--ink)">${esc(nameVon(f, e.von))} → ${esc(nameVon(f, e.an))}</b><div class="unter">${esc(e.art)}${e.stkl ? ` · StKl ${e.stkl}` : ''}${e.vorerwerbe?.length ? ` · ${e.vorerwerbe.length} Vorerwerb${e.vorerwerbe.length > 1 ? 'e' : ''} (§ 14)` : ''}</div></td>
+        return `<tr class="klickbar" data-act="erwerb-umschalten" data-id="${e.id}"><td class="num">${datum(e.datum)}</td><td><b style="font-weight:500;color:var(--ink)">${esc(nameVon(f, e.von))} → ${esc(nameVon(f, e.an))}</b><div class="unter">${esc(e.art)}${e.stkl ? ` · StKl ${e.stkl}` : ''}${e.vorerwerbe?.length ? ` · ${anzahl(e.vorerwerbe.length, 'Vorerwerb', 'Vorerwerbe', 'm')} (§ 14)` : ''}</div></td>
           <td class="r num">${euro(e.bereicherung)}</td><td class="r num">${e.steuerfrei ? '–' : euro(e.freibetragGenutzt + (e.versorgungsfreibetragGenutzt || 0))}</td><td class="r num">${e.steuerfrei ? `<span class="marke gut">${esc(e.steuerfreiGrund)}</span>` : euro(e.stpfl)}</td><td class="r num">${e.satz ? prozent(e.satz) : '–'}</td><td class="r num"><b style="font-weight:600;color:var(--ink)">${euro(e.steuer)}</b></td></tr>
           ${offen ? `<tr><td></td><td colspan="6">${erwerbDetail(f, e)}</td></tr>` : ''}`;
       }).join('')}
@@ -426,7 +445,7 @@ function detail(f, res, id) {
   const zielOk = z.erfuellt;
   return `<section class="detail abschnitt">
     <div class="detail-kopf"><h2>${esc(r.sz.name)}</h2>
-      ${r.laeufe.length > 1 ? `<div class="seg" role="group">${r.laeufe.map((l) => `<button type="button" data-act="reihenfolge" data-id="${l.erstversterbender}" aria-pressed="${l === lauf}">${esc(laufLabel(f, l))} (${prozent(r.gewichte[r.laeufe.indexOf(l)])})</button>`).join('')}</div>` : ''}
+      ${r.laeufe.length > 1 ? `<div class="seg" role="group">${r.laeufe.map((l) => `<button type="button" data-act="reihenfolge" data-id="${l.erstversterbender}" aria-pressed="${l === lauf}">${esc(laufLabel(f, l))} · ${prozent(r.gewichte[r.laeufe.indexOf(l)])}</button>`).join('')}</div><span class="small muted">Prozent = statistische Wahrscheinlichkeit der Reihenfolge</span>` : ''}
     </div>
     <div class="kacheln">${postenWerte(lauf.summen).filter((p) => p.w >= 0.5).map((p) => `<div class="kachel"><span class="lbl">${esc(p.t)}</span><span class="fig num">${euro(p.w)}</span></div>`).join('') || '<div class="kachel"><span class="lbl">Steuern und Kosten</span><span class="fig num">0 €</span></div>'}
       <div class="kachel"><span class="lbl">Ziel</span><span class="fig ${zielKlasse(zielOk)}" style="font-size:22px">${zielText(zielOk)}</span></div>
@@ -450,7 +469,7 @@ export function erwerbDetail(f, e) {
   }
   for (const a of e.abzuege || []) teile.push(zeile(a.text, a.betrag, true, a.norm));
   if (e.steuerUebernahmeBetrag) teile.push(zeile('Vom Schenker übernommene Steuer', e.steuerUebernahmeBetrag, false, '§ 10 Abs. 2 ErbStG'));
-  if (e.vorerwerbe?.length) teile.push(zeile(`Vorerwerbe innerhalb von 10 Jahren (${e.vorerwerbe.map((v) => datum(v.datum)).join(', ')})`, e.summeVorerwerbe, false, '§ 14 ErbStG'));
+  if (e.vorerwerbe?.length) teile.push(zeile(`Vorerwerbe innerhalb von zehn Jahren (${e.vorerwerbe.map((v) => datum(v.datum)).join(', ')})`, e.summeVorerwerbe, false, '§ 14 ErbStG'));
   if (!e.steuerfrei) {
     teile.push(zeile(`Persönlicher Freibetrag ${euro(e.freibetrag)} (${e.beziehung}, StKl ${e.stkl}), hier genutzt`, e.freibetragGenutzt, true, '§ 16 ErbStG'));
     if (e.versorgungsfreibetrag) teile.push(zeile(`Versorgungsfreibetrag ${euro(e.versorgungsfreibetrag)}, hier genutzt`, e.versorgungsfreibetragGenutzt || 0, true, '§ 17 ErbStG'));

@@ -35,7 +35,7 @@ function annahmeText(f, res) {
   if (modus === 'sofort') return 'Die Erbfälle treten nach dieser Annahme kurz nach der letzten Maßnahme ein.';
   if (modus === 'manuell') return 'Die Erbfälle treten zu den vorgegebenen Zeitpunkten ein.';
   return res.geber?.length > 1
-    ? 'Die Erbfälle treten bei statistischer Lebenserwartung (Sterbetafel) ein; beide Reihenfolgen sind nach ihrer Wahrscheinlichkeit gewichtet.'
+    ? 'Die Erbfälle treten bei statistischer Lebenserwartung (Sterbetafel) ein; beide Reihenfolgen sind nach ihrer statistischen Wahrscheinlichkeit gewichtet.'
     : 'Der Erbfall tritt bei statistischer Lebenserwartung (Sterbetafel) ein.';
 }
 
@@ -78,7 +78,7 @@ function uebersicht(res, basis, beste) {
   return `<section class="dr-block">
     <h2>Ergebnis im Überblick</h2>
     <table class="dr-tab"><thead><tr><th>Gestaltung</th><th class="r">Steuern und Kosten</th><th class="r">gegenüber ohne Gestaltung</th><th class="r">Ziel</th></tr></thead><tbody>${zeilen}</tbody></table>
-    <p class="dr-klein">Steuern und Kosten bis zum Übergang auf die nächste Generation, über beide Sterbereihenfolgen nach ihrer Wahrscheinlichkeit gewichtet.</p>
+    <p class="dr-klein">Steuern und Kosten bis zum Übergang auf die nächste Generation, über beide Sterbereihenfolgen nach ihrer statistischen Wahrscheinlichkeit gewichtet.</p>
   </section>`;
 }
 
@@ -103,7 +103,7 @@ function ablauf(f, r) {
     </li>`;
   }).join('');
   const reihenfolge = r.laeufe.length > 1
-    ? `<p class="dr-klein">Dargestellt ist der wahrscheinlichere Ablauf: ${esc(name(f, lauf.erstversterbender))} stirbt zuerst (${prozent(r.gewichte[i])}).</p>`
+    ? `<p class="dr-klein">Dargestellt ist der wahrscheinlichere Ablauf: ${esc(name(f, lauf.erstversterbender))} stirbt zuerst (statistische Wahrscheinlichkeit ${prozent(r.gewichte[i])}).</p>`
     : '';
   return `<h3>Ablauf</h3>${reihenfolge}<ol class="dr-ablauf">${eintraege}</ol>`;
 }

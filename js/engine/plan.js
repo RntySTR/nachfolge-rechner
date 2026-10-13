@@ -167,13 +167,13 @@ function position(st, { asset, quote, an, von, datum, erbfall, text, mitRechten 
       pos.befreiungen.push({ norm: '§ 13 Abs. 1 Nr. 4a ErbStG', text: 'Familienheim an Ehegatten', betrag: wert });
     } else if (ehe && erbfall && st.fall.selbstnutzung?.[an] !== false) {
       befreitQuote = 1;
-      pos.befreiungen.push({ norm: '§ 13 Abs. 1 Nr. 4b ErbStG', text: 'Familienheim an Ehegatten (10 Jahre Selbstnutzung)', betrag: wert });
-      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim 10 Jahre selbst bewohnen; sonst entfällt die Befreiung rückwirkend, es sei denn, zwingende Gründe (z. B. Pflegebedürftigkeit) hindern die Selbstnutzung.`, { norm: '§ 13 Abs. 1 Nr. 4b ErbStG' });
+      pos.befreiungen.push({ norm: '§ 13 Abs. 1 Nr. 4b ErbStG', text: 'Familienheim an Ehegatten (zehn Jahre Selbstnutzung)', betrag: wert });
+      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim zehn Jahre selbst bewohnen; sonst entfällt die Befreiung rückwirkend, es sei denn, zwingende Gründe (z. B. Pflegebedürftigkeit) hindern die Selbstnutzung.`, { norm: '§ 13 Abs. 1 Nr. 4b ErbStG' });
     } else if (erbfall && st.fall.selbstnutzung?.[an] === true && kindOderKindesKind(st.fall, von, an)) {
       const qm = Number(asset.wohnflaeche) || 0;
       befreitQuote = qm > 0 ? Math.min(1, R.familienheimKinderQm / qm) : 1;
       pos.befreiungen.push({ norm: '§ 13 Abs. 1 Nr. 4c ErbStG', text: qm > R.familienheimKinderQm ? `Familienheim an Kind (${R.familienheimKinderQm} von ${qm} m²)` : 'Familienheim an Kind', betrag: wert * befreitQuote });
-      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim unverzüglich beziehen und 10 Jahre selbst bewohnen, es sei denn, zwingende Gründe hindern die Selbstnutzung.`, { norm: '§ 13 Abs. 1 Nr. 4c ErbStG' });
+      hinweis(st, 'info', 'Familienheim: Behaltensfrist', `${name(st.fall, an)} muss das Familienheim unverzüglich beziehen und zehn Jahre selbst bewohnen, es sei denn, zwingende Gründe hindern die Selbstnutzung.`, { norm: '§ 13 Abs. 1 Nr. 4c ErbStG' });
     }
   }
   const quote13d = istImmobilie(asset) && asset.nutzung === 'vermietet_wohnen' ? R.befreiungWohnvermietung : 0;
@@ -260,7 +260,7 @@ function schenkung(st, s) {
     const vorhanden = st.eigentum[a.id]?.[von] || 0;
     let q = g.betrag != null && g.betrag !== '' && (a.art === 'geld' || a.art === 'depot') ? Number(g.betrag) / vw(a) : Number(g.quote ?? vorhanden);
     if (q > vorhanden + EPS) {
-      hinweis(st, 'warnung', 'Anteil gekürzt', `${name(fall, von)} hält am ${s.datum} nur ${fmtQuote(vorhanden)} an „${a.bezeichnung}“; die Schenkung wurde darauf begrenzt.`);
+      hinweis(st, 'warnung', 'Anteil gekürzt', `${name(fall, von)} hält am ${fmtDatum(s.datum)} nur ${fmtQuote(vorhanden)} an „${a.bezeichnung}“; die Schenkung wurde darauf begrenzt.`);
       q = vorhanden;
     }
     if (q <= EPS) continue;
@@ -422,7 +422,7 @@ function schenkung(st, s) {
     }
   }
   if (gl.length) {
-    hinweis(st, 'risiko', 'Teilentgeltliche Übertragung', 'Gegenleistungen machen die Übertragung einkommensteuerlich teilentgeltlich. Bei Immobilien im Privatvermögen innerhalb von 10 Jahren nach Anschaffung droht ein privates Veräußerungsgeschäft.', { norm: '§ 23 Abs. 1 S. 1 Nr. 1 EStG' });
+    hinweis(st, 'risiko', 'Teilentgeltliche Übertragung', 'Gegenleistungen machen die Übertragung einkommensteuerlich teilentgeltlich. Bei Immobilien im Privatvermögen innerhalb von zehn Jahren nach Anschaffung droht ein privates Veräußerungsgeschäft.', { norm: '§ 23 Abs. 1 S. 1 Nr. 1 EStG' });
   }
 
   // Kosten
@@ -533,7 +533,7 @@ function gueterstand(st, s) {
   });
 
   if (uebertragen.some((u) => istImmobilie(u.asset))) {
-    hinweis(st, 'risiko', 'Spekulationsfalle', 'Die Übertragung einer Immobilie an Erfüllungs statt ist einkommensteuerlich entgeltlich. Liegt die Anschaffung weniger als 10 Jahre zurück, entsteht ein privates Veräußerungsgeschäft.', { norm: '§ 23 Abs. 1 S. 1 Nr. 1 EStG' });
+    hinweis(st, 'risiko', 'Spekulationsfalle', 'Die Übertragung einer Immobilie an Erfüllungs statt ist einkommensteuerlich entgeltlich. Liegt die Anschaffung weniger als zehn Jahre zurück, entsteht ein privates Veräußerungsgeschäft.', { norm: '§ 23 Abs. 1 S. 1 Nr. 1 EStG' });
   }
 
   // Kosten: Ehevertrag (§ 100 GNotKG) + Erfüllungsvereinbarung
@@ -680,7 +680,11 @@ export function beschreibeVerfuegung(fall, v) {
   let t = v.typ === 'alleinerbe_ehegatte'
     ? `Ehegatte Alleinerbe; Schlusserben: ${quoten(v.schlusserben) || 'gesetzlich'}`
     : `Erben: ${quoten(v.quoten) || '–'}`;
-  if (v.vermaechtnisse?.length) t += ` · ${v.vermaechtnisse.length} Vermächtnis${v.vermaechtnisse.length > 1 ? 'se' : ''}`;
+  if (v.vermaechtnisse?.length) {
+    const n = v.vermaechtnisse.length;
+    const wort = ['', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun', 'zehn', 'elf', 'zwölf'][n] || String(n);
+    t += ` · ${wort} Vermächtnis${n > 1 ? 'se' : ''}`;
+  }
   return t;
 }
 
@@ -812,7 +816,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
       zahlungen.push([ehe, pt, 'Pflichtteil']);
     }
     kostenBuchen(st, { datum, ...urkunde({ titel: 'Ausschlagung der Erbschaft', notar: [{ kv: '21201', text: 'Ausschlagungserklärung', wert: Math.max(0, nachlassVW * 0.5), satz: 0.5, min: 30 }] }) });
-    hinweis(st, 'info', 'Güterrechtliche Lösung', `${name(fall, ehe)} schlägt aus und erhält den tatsächlichen Zugewinnausgleich steuerfrei sowie den kleinen Pflichtteil. Frist: 6 Wochen ab Kenntnis (§ 1944 BGB).`, { norm: '§ 1371 Abs. 3 BGB, § 5 Abs. 2 ErbStG' });
+    hinweis(st, 'info', 'Güterrechtliche Lösung', `${name(fall, ehe)} schlägt aus und erhält den tatsächlichen Zugewinnausgleich steuerfrei sowie den kleinen Pflichtteil. Frist: sechs Wochen ab Kenntnis (§ 1944 BGB).`, { norm: '§ 1371 Abs. 3 BGB, § 5 Abs. 2 ErbStG' });
   }
 
   // 3b. Pflichtteile
@@ -830,7 +834,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
     lastenErben.push({ text: `Pflichtteil ${name(fall, pid)}`, betrag: pt, norm: '§ 10 Abs. 5 Nr. 2 ErbStG' });
     zahlungen.push([pid, pt, 'Pflichtteil']);
     if (v.typ === 'alleinerbe_ehegatte' && v.schlusserben?.[pid]) {
-      hinweis(st, 'info', 'Pflichtteil nach dem ersten Erbfall', `Gerechnet ist, dass ${name(fall, pid)} Schlusserbe bleibt. Das setzt voraus, dass eine Pflichtteilsstrafklausel nur bei Geltendmachung gegen den Willen des Längerlebenden greift. Der Anspruch muss innerhalb der Verjährung (3 Jahre, §§ 195, 199 BGB) ernsthaft geltend gemacht werden; die Erfüllung kann gestundet werden. Nach Verjährung oder beim Tod des Längerlebenden ist kein Abzug mehr möglich (BFH II R 17/16).`, { norm: '§§ 2303, 2317 BGB; § 10 Abs. 5 Nr. 2 ErbStG' });
+      hinweis(st, 'info', 'Pflichtteil nach dem ersten Erbfall', `Gerechnet ist, dass ${name(fall, pid)} Schlusserbe bleibt. Das setzt voraus, dass eine Pflichtteilsstrafklausel nur bei Geltendmachung gegen den Willen des Längerlebenden greift. Der Anspruch muss innerhalb der Verjährung (drei Jahre, §§ 195, 199 BGB) ernsthaft geltend gemacht werden; die Erfüllung kann gestundet werden. Nach Verjährung oder beim Tod des Längerlebenden ist kein Abzug mehr möglich (BFH II R 17/16).`, { norm: '§§ 2303, 2317 BGB; § 10 Abs. 5 Nr. 2 ErbStG' });
     }
   }
 
@@ -933,7 +937,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
       zahlungen.push([g.an, betrag, 'Vermächtnis']);
     }
     if (geldVm.some((g) => g.vm.typ === 'freibetrag')) {
-      hinweis(st, 'info', 'Freibetragsvermächtnis', 'Die Höhe ist auf den verbleibenden Freibetrag gegenüber dem Erstversterbenden bemessen (Zweck- bzw. „Super“-Vermächtnis). Der Längerlebende bestimmt Bedachte, Anteile, Gegenstand und Zeitpunkt nach billigem Ermessen; ein spätester Erfüllungstermin (üblich: 3 Jahre nach dem ersten Erbfall) und ein Ersatzbestimmungsberechtigter sind festzulegen. Ohne Termin ist das Vermächtnis im Zweifel erst beim Tod des Längerlebenden fällig (§ 2181 BGB) und gilt als Erwerb von ihm (§ 6 Abs. 4 ErbStG). Gerechnet ist mit Erfüllung in Geld; die Erfüllung mit Grundbesitz an Erfüllungs statt ist einkommensteuerlich entgeltlich (§ 23 EStG).', { norm: '§§ 2151, 2153, 2156, 2181 BGB; § 6 Abs. 4 ErbStG' });
+      hinweis(st, 'info', 'Freibetragsvermächtnis', 'Die Höhe ist auf den verbleibenden Freibetrag gegenüber dem Erstversterbenden bemessen (Zweck- bzw. „Super“-Vermächtnis). Der Längerlebende bestimmt Bedachte, Anteile, Gegenstand und Zeitpunkt nach billigem Ermessen; ein spätester Erfüllungstermin (üblich: drei Jahre nach dem ersten Erbfall) und ein Ersatzbestimmungsberechtigter sind festzulegen. Ohne Termin ist das Vermächtnis im Zweifel erst beim Tod des Längerlebenden fällig (§ 2181 BGB) und gilt als Erwerb von ihm (§ 6 Abs. 4 ErbStG). Gerechnet ist mit Erfüllung in Geld; die Erfüllung mit Grundbesitz an Erfüllungs statt ist einkommensteuerlich entgeltlich (§ 23 EStG).', { norm: '§§ 2151, 2153, 2156, 2181 BGB; § 6 Abs. 4 ErbStG' });
     }
   }
   for (const [an, positionen] of vmErwerbe) {
@@ -1004,7 +1008,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
       positionen, abzuege, par27,
       versorgungsfreibetrag: vmErwerbe.has(erbe) ? 0 : versorgungsfreibetrag(fall, erblasser, erbe, datum)
     });
-    if (e.par27Ermaessigung > 0) hinweis(st, 'info', 'Mehrfacher Erwerb', `Die Steuer von ${name(fall, erbe)} ist um ${fmtEuro(e.par27Ermaessigung)} ermäßigt, weil das Vermögen innerhalb von 10 Jahren bereits versteuert wurde.`, { norm: '§ 27 ErbStG' });
+    if (e.par27Ermaessigung > 0) hinweis(st, 'info', 'Mehrfacher Erwerb', `Die Steuer von ${name(fall, erbe)} ist um ${fmtEuro(e.par27Ermaessigung)} ermäßigt, weil das Vermögen innerhalb von zehn Jahren bereits versteuert wurde.`, { norm: '§ 27 ErbStG' });
   }
 
   // Erwerbe des Erblasserehegatten merken (für § 27 beim zweiten Erbfall)
@@ -1121,7 +1125,7 @@ export function simuliere(fall, szenario, optionen = {}) {
   const st = initZustand(fall, szenario);
   const stichtag = fall.stichtag;
 
-  // Vorschenkungen der letzten 10 Jahre
+  // Vorschenkungen der letzten zehn Jahre
   for (const v of fall.vorschenkungen || []) {
     if (!v.von || !v.an || !v.datum) continue;
     const e = berechneErwerb(fall, {

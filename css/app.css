@@ -249,6 +249,9 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .stammbaum svg.linien path.ehe { stroke: var(--brand); stroke-width: 2; }
 .generation { position: relative; display: flex; justify-content: center; gap: 18px; flex-wrap: nowrap; min-width: min-content; }
 .generation + .generation { margin-top: 56px; }
+.generation .reihe { position: relative; display: flex; justify-content: center; gap: 18px; flex-wrap: nowrap; }
+.generation .neu-slot { position: absolute; left: 100%; top: 0; padding-left: 18px; }
+.generation .neu-slot .neu-person { width: 128px; }
 .gen-label { position: absolute; left: 0; top: -22px; font-size: 12px; color: var(--muted); }
 .person {
   position: relative; z-index: 1; width: 168px; flex: none;
@@ -275,6 +278,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .personenliste { display: grid; gap: 1px; background: var(--line); margin-top: 20px; }
 .personenliste .zeile { display: grid; grid-template-columns: 40px 1.4fr 1fr 1fr 1.2fr 32px; align-items: center; gap: 14px; padding: 12px 16px; background: var(--surface); cursor: pointer; }
 .personenliste .zeile:hover { background: var(--surface-warm); }
+
+/* Trenner zwischen zwei Eingabewegen für dasselbe */
+.trenner { display: flex; align-items: center; gap: 12px; margin: 6px 0 2px; font-size: 12px; color: var(--muted); }
+.trenner::before, .trenner::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
 /* ------------------------------------------------------------------ Vermögen */
 
@@ -386,20 +393,6 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .annahmen { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 20px; background: var(--surface-warm); margin-bottom: 20px; }
 .annahmen .lbl { font: 500 13px/1 var(--font-display); color: var(--ink); }
 
-.vergleich { display: grid; gap: 1px; background: var(--line); margin-top: 24px; }
-.vg-zeile { display: grid; grid-template-columns: minmax(180px, 1.1fr) minmax(220px, 2fr) 150px; gap: 20px; align-items: center; padding: 18px 20px; background: var(--surface); cursor: pointer; }
-.vg-zeile:hover { background: var(--surface-warm); }
-.vg-zeile[aria-current="true"] { background: var(--brand-tint); }
-.vg-zeile .nm { font: 500 15px/1.3 var(--font-display); color: var(--ink); }
-.vg-zeile .nm small { display: block; margin-top: 4px; font: 400 12px/1.3 var(--font-text); color: var(--muted); }
-.vg-zeile .betrag { text-align: right; font: 500 20px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
-.vg-zeile .betrag small { display: block; margin-top: 6px; font: 400 12px/1.2 var(--font-text); color: var(--muted); }
-.stapel { display: flex; height: 22px; background: var(--surface-warm); }
-.stapel span { height: 100%; }
-.stapel .l { background: var(--p4); }
-.stapel .e { background: var(--brand); }
-.stapel .k { background: var(--p2); }
-.vg-zeile.beste .betrag { color: var(--brand); }
 .marke { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--radius-pill); font: 500 12px/1.3 var(--font-display); }
 .marke.gut { background: var(--success-tint); color: var(--success); }
 .marke.warn { background: var(--warn-tint); color: var(--warn); }
@@ -503,11 +496,12 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   .vermoegen-kopf, .ergebnis-hero { grid-template-columns: 1fr; }
   .ergebnis-hero .seite + .seite { border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.12); }
   .raster.zwei, .raster.drei { grid-template-columns: 1fr; }
-  .vg-zeile { grid-template-columns: 1fr auto; }
+
   .vs-raster { grid-template-columns: 1fr; }
   .ab-kopf { grid-template-columns: 1fr; }
   .ab-ergebnis { justify-items: start; text-align: left; }
-  .vg-zeile .stapel { grid-column: 1 / -1; grid-row: 2; }
+  .saeule .sa-name { font-size: 12px; }
+  .diagramm { --sa-h: 200px; }
   .personenliste .zeile { grid-template-columns: 40px 1fr 32px; }
   .personenliste .zeile .opt { display: none; }
   .gesamtwert .fig { font-size: 40px; }
@@ -593,3 +587,35 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   .bl-zeile { grid-template-columns: 1fr auto; }
   .bl-zeile .bl-balken { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* Vergleich: stehende Säulen */
+.diagramm { --sa-h: 260px; position: relative; display: grid; grid-template-columns: 64px 1fr; margin-top: 24px; padding-top: 28px; }
+.sa-achse { position: relative; height: var(--sa-h); grid-column: 1; grid-row: 1; }
+.sa-achse span { position: absolute; right: 10px; transform: translateY(50%); font: 400 12px/1 var(--font-text); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sa-raster { position: absolute; left: 64px; right: 0; top: 28px; height: var(--sa-h); pointer-events: none; }
+.sa-raster i { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+.sa-reihe { grid-column: 2; grid-row: 1; display: flex; align-items: stretch; position: relative; }
+.saeule { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; background: none; border: 0; padding: 0 4px 8px; font: inherit; text-align: center; cursor: pointer; border-radius: 8px; }
+.saeule:hover, .saeule:focus-visible { background: var(--surface-warm); }
+.saeule[aria-current="true"] { background: var(--brand-tint); }
+.sa-plot { position: relative; width: 100%; height: var(--sa-h); display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.sa-stapel { width: 24px; max-width: 100%; display: flex; flex-direction: column-reverse; gap: 2px; min-height: 0; }
+.sa-stapel span { min-height: 2px; flex-basis: 0; }
+.sa-stapel .l { background: var(--p3); }
+.sa-stapel .e { background: var(--brand); }
+.sa-stapel .k { background: var(--p2); }
+.sa-stapel span:last-child { border-radius: 4px 4px 0 0; }
+.sa-wert { order: -1; margin-bottom: 6px; font: 500 14px/1 var(--font-display); color: var(--ink); font-variant-numeric: tabular-nums; }
+.saeule.beste .sa-wert { color: var(--brand); }
+.sa-plot > .sa-stapel { order: 0; }
+.sa-name { margin-top: 10px; font: 500 14px/1.3 var(--font-display); color: var(--ink); overflow-wrap: anywhere; }
+.sa-name small { display: block; margin-top: 4px; font: 400 12px/1.3 var(--font-text); color: var(--muted); }
+.sa-tip { display: none; position: absolute; z-index: 5; left: 50%; bottom: 40%; transform: translateX(-50%); min-width: 220px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgb(0 0 0 / .12); text-align: left; font: 400 12px/1.4 var(--font-text); color: var(--text); }
+.sa-tip b { display: block; margin-bottom: 4px; font: 600 15px/1.2 var(--font-display); color: var(--ink); }
+.sa-tip span { display: flex; justify-content: space-between; gap: 12px; }
+.sa-tip span b { display: inline; margin: 0; font: 500 12px/1.4 var(--font-text); }
+.saeule:hover .sa-tip, .saeule:focus-visible .sa-tip { display: block; }
+.saeule:hover .sa-stapel, .saeule:focus-visible .sa-stapel { filter: brightness(1.08); }
+.sa-tabelle { margin-top: 12px; font-size: 13px; }
+.sa-tabelle summary { cursor: pointer; color: var(--muted); }
+.sa-tabelle table { margin-top: 8px; }

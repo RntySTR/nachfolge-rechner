@@ -105,7 +105,7 @@ function bausteinTestament(fall) {
   const texte = [];
   if (ehepaar) {
     texte.push(`Erbvertrag: Die Ehegatten setzen sich gegenseitig ein; Schlusserben sind ${namen(fall, Object.keys(ziel))}.`);
-    if (kinderImZiel.length) texte.push(`Beim ersten Erbfall erhalten ${namen(fall, kinderImZiel)} Vermächtnisse bis zur Höhe ihres Freibetrags gegenüber dem Erstversterbenden${nb.laengerlebenderAbgesichert === false ? '' : `; gerechnet sind alle Vermächtnisse zusammen mit höchstens der Hälfte des Nachlasses (Verkehrswert)`}. Der Längerlebende bestimmt Gegenstand, Anteile und Zeitpunkt nach billigem Ermessen, spätestens 3 Jahre nach dem ersten Erbfall; ohne diese Frist wäre das Vermächtnis erst bei seinem Tod fällig (§ 2181 BGB, § 6 Abs. 4 ErbStG).`);
+    if (kinderImZiel.length) texte.push(`Beim ersten Erbfall erhalten ${namen(fall, kinderImZiel)} Vermächtnisse bis zur Höhe ihres Freibetrags gegenüber dem Erstversterbenden${nb.laengerlebenderAbgesichert === false ? '' : `; gerechnet sind alle Vermächtnisse zusammen mit höchstens der Hälfte des Nachlasses (Verkehrswert)`}. Der Längerlebende bestimmt Gegenstand, Anteile und Zeitpunkt nach billigem Ermessen, spätestens drei Jahre nach dem ersten Erbfall; ohne diese Frist wäre das Vermächtnis erst bei seinem Tod fällig (§ 2181 BGB, § 6 Abs. 4 ErbStG).`);
   } else {
     texte.push(`Notarielles Testament zugunsten von ${namen(fall, Object.keys(ziel))}.`);
   }
@@ -160,7 +160,7 @@ function bausteinSchenkung(fall, kandidaten) {
   const nb = fall.ziel?.nebenbedingungen || {};
   const texte = kandidaten.map(({ g, a, q, empf }) =>
     `${name(fall, g)} überträgt ${q < 1 ? `${pron(fall, g).seinen} Anteil (${fmtQuote(q)}) am` : 'das'} „${a.bezeichnung || 'Vermögen'}“ jetzt an ${namen(fall, Object.keys(empf))} und behält sich den Nießbrauch vor${ehegatte(fall, g) && a.art === 'immobilie' && nb.laengerlebenderAbgesichert !== false ? `; nach ${pron(fall, g).seinem} Tod steht er ${name(fall, ehegatte(fall, g))} zu (Zuwendungsnießbrauch, ertragsteuerlich gesondert zu prüfen)` : ''}.`);
-  texte.push('Der Kapitalwert des Nießbrauchs mindert die Schenkung. Nach 10 Jahren stehen die Freibeträge erneut zur Verfügung; ein Rückforderungsrecht sichert die Schenker ab.');
+  texte.push('Der Kapitalwert des Nießbrauchs mindert die Schenkung. Nach zehn Jahren stehen die Freibeträge erneut zur Verfügung; ein Rückforderungsrecht sichert die Schenker ab.');
   return {
     key: 'S',
     titel: 'Schenkung unter Nießbrauchsvorbehalt',
@@ -169,7 +169,7 @@ function bausteinSchenkung(fall, kandidaten) {
   };
 }
 
-/** Schenkung in zwei Tranchen: heute bis zur Höhe der Freibeträge, Rest nach Ablauf von 10 Jahren. */
+/** Schenkung in zwei Tranchen: heute bis zur Höhe der Freibeträge, Rest nach Ablauf von zehn Jahren. */
 function bausteinTranchen(fall, kandidaten, d) {
   if (!kandidaten.length) return null;
   const pm = personMap(fall);
@@ -198,7 +198,7 @@ function bausteinTranchen(fall, kandidaten, d) {
     if (q1 > 0.001) schritte.push(schenkungsSchritt(fall, { ...k, quote: q1, datum: d.schenkung, titel: `Überlassung ${k.a.bezeichnung || ''} (1. Teil)`.trim() }));
     if (k.q - q1 > 0.001 && restJahre > 10.5) {
       schritte.push(schenkungsSchritt(fall, { ...k, quote: Math.round((k.q - q1) * 1000) / 1000, datum: d.tranche2, titel: `Überlassung ${k.a.bezeichnung || ''} (2. Teil)`.trim() }));
-      texte.push(`${name(fall, k.g)} überträgt vom „${k.a.bezeichnung || 'Vermögen'}“ heute ${fmtQuote(q1)} steuerfrei im Rahmen der Freibeträge und den Rest nach Ablauf von 10 Jahren.`);
+      texte.push(`${name(fall, k.g)} überträgt vom „${k.a.bezeichnung || 'Vermögen'}“ heute ${fmtQuote(q1)} steuerfrei im Rahmen der Freibeträge und den Rest nach Ablauf von zehn Jahren.`);
     } else {
       texte.push(`${name(fall, k.g)} überträgt vom „${k.a.bezeichnung || 'Vermögen'}“ ${fmtQuote(q1)} im Rahmen der Freibeträge; der Rest geht im Erbfall über.`);
     }
@@ -253,7 +253,7 @@ function bausteinPflichtteil(fall) {
   return {
     key: 'P',
     titel: 'Pflichtteil nach dem ersten Erbfall',
-    texte: [`Nach dem ersten Erbfall machen ${namen(fall, kinder)} ihren Pflichtteil geltend und nutzen so ihren Freibetrag gegenüber dem Erstversterbenden. Voraussetzung: Die Pflichtteilsstrafklausel greift nur bei Geltendmachung gegen den Willen des Längerlebenden. Geltendmachung innerhalb der Verjährung (3 Jahre); die Erfüllung kann gestundet werden, aber nicht bis zum Tod des Längerlebenden.`],
+    texte: [`Nach dem ersten Erbfall machen ${namen(fall, kinder)} ihren Pflichtteil geltend und nutzen so ihren Freibetrag gegenüber dem Erstversterbenden. Voraussetzung: Die Pflichtteilsstrafklausel greift nur bei Geltendmachung gegen den Willen des Längerlebenden. Geltendmachung innerhalb der Verjährung (drei Jahre); die Erfüllung kann gestundet werden, aber nicht bis zum Tod des Längerlebenden.`],
     erbfallOptionen: { pflichtteil: kinder },
     schritte: () => []
   };
@@ -266,7 +266,7 @@ function bausteinAusschlagung(fall) {
   return {
     key: 'A',
     titel: 'Ausschlagung des Längerlebenden',
-    texte: ['Der Längerlebende schlägt binnen 6 Wochen aus (§ 1944 BGB) und erhält den tatsächlichen Zugewinnausgleich steuerfrei sowie den kleinen Pflichtteil (§ 1371 Abs. 3 BGB); der Nachlass geht unmittelbar an die Kinder. Annahme: Die Schlusserben sind Ersatzerben; die Ersatzerbenregelung ist zu prüfen.'],
+    texte: ['Der Längerlebende schlägt binnen sechs Wochen aus (§ 1944 BGB) und erhält den tatsächlichen Zugewinnausgleich steuerfrei sowie den kleinen Pflichtteil (§ 1371 Abs. 3 BGB); der Nachlass geht unmittelbar an die Kinder. Annahme: Die Schlusserben sind Ersatzerben; die Ersatzerbenregelung ist zu prüfen.'],
     erbfallOptionen: { ausschlagungEhegatte: true },
     schritte: () => []
   };

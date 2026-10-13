@@ -1,6 +1,6 @@
 // Seitenpanels zum Bearbeiten von Personen, Vermögen, Verfügungen und Schritten.
 
-import { esc, euro, quote, datum, zahlText } from './format.js';
+import { esc, euro, quote, datum, zahlText, anzahl } from './format.js';
 import { icon } from './icons.js';
 import {
   ROLLEN, ARTEN, NUTZUNGEN, avatar, nameVon, textfeld, datumfeld, eurofeld, zahlfeld, auswahl, segment, schalter,
@@ -56,7 +56,7 @@ function sheetPerson(f, id) {
   ].join('');
   const inhalt = `
     <div class="gruppe">
-      ${textfeld('Vorname', `${pf}.vorname`, p.vorname, { platzhalter: istGeber ? (p.id === f.geber.a ? 'z. B. Klaus' : 'z. B. Gabriele') : 'Vorname' })}
+      ${textfeld('Vorname', `${pf}.vorname`, p.vorname, { platzhalter: istGeber ? (p.id === f.geber.a ? 'z. B. Thomas' : 'z. B. Sabine') : 'Vorname' })}
       <div class="raster zwei">${datumfeld('Geburtsdatum', `${pf}.geburt`, p.geburt)}${feld('Geschlecht', segment(`${pf}.geschlecht`, p.geschlecht || 'm', [['w', 'weiblich'], ['m', 'männlich']], { voll: true }), 'Bestimmt Vervielfältiger und Lebenserwartung.')}</div>
     </div>
     ${istGeber ? '' : `<div class="gruppe"><div class="gt">Beziehung</div>
@@ -78,9 +78,13 @@ function sheetVermoegen(f, id) {
   const immo = a.art === 'immobilie';
   const [ga, gb] = [f.geber.a, f.geber.b];
   const eig = a.eigentum || {};
+  const gleich = (soll) => {
+    const ids = Object.keys(eig).filter((id) => Number(eig[id]) > 0);
+    return ids.length === Object.keys(soll).length && ids.every((id) => Math.abs(Number(eig[id]) - (soll[id] || 0)) < 1e-6);
+  };
   const schnell = [
-    ['allein-a', `Allein ${nameVon(f, ga)}`],
-    ...(gb ? [['allein-b', `Allein ${nameVon(f, gb)}`], ['haelfte', 'Je zur Hälfte']] : [])
+    ['allein-a', `Allein ${nameVon(f, ga)}`, gleich({ [ga]: 1 })],
+    ...(gb ? [['allein-b', `Allein ${nameVon(f, gb)}`, gleich({ [gb]: 1 })], ['haelfte', 'Je zur Hälfte', gleich({ [ga]: 0.5, [gb]: 0.5 })]] : [])
   ];
   const inhalt = `
     <div class="gruppe">
@@ -103,7 +107,10 @@ function sheetVermoegen(f, id) {
       </div>
     </div>
     <div class="gruppe"><div class="gt">Eigentum</div>
-      <div class="chips">${schnell.map(([k, t]) => `<button type="button" class="chip ohneavatar" data-act="eigentum-schnell" data-art="${k}" data-id="${a.id}">${esc(t)}</button>`).join('')}</div>
+      <div class="feld"><div class="lbl">Schnellwahl</div>
+        <div class="seg voll" role="group">${schnell.map(([k, t, an]) => `<button type="button" data-act="eigentum-schnell" data-art="${k}" data-id="${a.id}" aria-pressed="${an}">${esc(t)}</button>`).join('')}</div>
+      </div>
+      <div class="trenner"><span>oder Personen einzeln wählen</span></div>
       ${anteilEditor(f, `${pf}.eigentum`, eig, f.personen)}
     </div>
     <div class="gruppe"><div class="gt">Notiz</div>
@@ -146,7 +153,7 @@ function vermaechtnisKarte(f, pf, vm, ehepaar, k) {
   let felder = '';
   if (vm.typ === 'geld') felder = feld('Betrag je Bedachtem', euroEingabe(`${pf}.betrag`, vm.betrag));
   if (vm.typ === 'gegenstand') felder = `${auswahl('Gegenstand', `${pf}.assetId`, vm.assetId, f.vermoegen.map((a) => [a.id, a.bezeichnung]), { leer: 'Bitte wählen' })}${feld('Anteil am Anteil des Erblassers', quoteEingabe(`${pf}.quote`, vm.quote ?? 1))}`;
-  if (vm.typ === 'freibetrag') felder = `${feld('Höchstbetrag je Bedachtem (optional)', euroEingabe(`${pf}.betragMax`, vm.betragMax))}<p class="small muted">Bemessen auf den verbleibenden Freibetrag gegenüber dem Erblasser; der Längerlebende bestimmt Gegenstand und Zeitpunkt nach billigem Ermessen, spätestens 3 Jahre nach dem Erbfall (§§ 2151, 2153, 2156, 2181 BGB).</p>`;
+  if (vm.typ === 'freibetrag') felder = `${feld('Höchstbetrag je Bedachtem (optional)', euroEingabe(`${pf}.betragMax`, vm.betragMax))}<p class="small muted">Bemessen auf den verbleibenden Freibetrag gegenüber dem Erblasser; der Längerlebende bestimmt Gegenstand und Zeitpunkt nach billigem Ermessen, spätestens drei Jahre nach dem Erbfall (§§ 2151, 2153, 2156, 2181 BGB).</p>`;
   if (vm.typ === 'niessbrauch') felder = '<p class="small muted">Nießbrauch am gesamten Nachlass. Die Erben werden mit dem Kapitalwert belastet.</p>';
   return `<div class="unterkarte">
     <div class="kopfzeile"><b style="font:500 14px/1.2 var(--font-display);color:var(--ink)">${titel}</b>${iconknopf('liste-entfernen', 'trash-2', 'Vermächtnis entfernen', { pfad: pf.replace(/\.\d+$/, ''), index: k })}</div>
@@ -307,7 +314,7 @@ function verzichtEditor(f, pf, s) {
     ${auswahl('Gegenstand', `${pf}.assetId`, s.assetId, f.vermoegen.filter((a) => a.art === 'immobilie' || a.art === 'depot').map((a) => [a.id, a.bezeichnung]), { leer: 'Bitte wählen' })}
     ${auswahl('Nießbraucher', `${pf}.berechtigter`, s.berechtigter, f.personen.map((p) => [p.id, nameVon(f, p.id)]), { leer: 'Bitte wählen' })}
     ${eurofeld('Entgelt (optional)', `${pf}.entgelt`, s.entgelt, { hilfe: 'Ohne Entgelt ist der Verzicht eine Schenkung an den Eigentümer in Höhe des Kapitalwerts.' })}
-    <p class="small muted">Liegt die ursprüngliche Schenkung mehr als 10 Jahre zurück, steht ein neuer Freibetrag zur Verfügung.</p>
+    <p class="small muted">Liegt die ursprüngliche Schenkung mehr als zehn Jahre zurück, steht ein neuer Freibetrag zur Verfügung.</p>
   </div>`;
 }
 
@@ -315,7 +322,7 @@ function verzichtEditor(f, pf, s) {
 
 function sheetFaelle(f) {
   const zeilen = state.faelle.map((x) => `<div class="unterkarte" style="${x.id === f.id ? 'outline:1px solid var(--brand)' : ''}">
-    <div class="kopfzeile"><div><b style="font:500 15px/1.3 var(--font-display);color:var(--ink)">${esc(x.titel || 'Ohne Titel')}</b><div class="small muted">${x.personen.length} Personen · ${x.vermoegen.length} Vermögenswerte · ${x.szenarien.length} Szenarien</div></div>
+    <div class="kopfzeile"><div><b style="font:500 15px/1.3 var(--font-display);color:var(--ink)">${esc(x.titel || 'Ohne Titel')}</b><div class="small muted">${anzahl(x.personen.length, 'Person', 'Personen', 'f')} · ${anzahl(x.vermoegen.length, 'Vermögenswert', 'Vermögenswerte')} · ${anzahl(x.szenarien.length, 'Szenario', 'Szenarien')}</div></div>
     ${x.id === f.id ? '<span class="marke info">geöffnet</span>' : aktionsknopf('fall-oeffnen', 'Öffnen', { cls: 'klein', daten: { id: x.id } })}</div>
   </div>`).join('');
   const i = state.faelle.indexOf(f);

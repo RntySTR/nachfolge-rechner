@@ -6,6 +6,17 @@ export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+const ZAHLWORTE = {
+  m: ['kein', 'ein', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun', 'zehn', 'elf', 'zwölf'],
+  f: ['keine', 'eine', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun', 'zehn', 'elf', 'zwölf']
+};
+
+/** Anzahl im Fließtext: Zahlen bis zwölf als Wort („zwei Vermächtnisse“), darüber als Ziffer. */
+export function anzahl(n, einzahl, mehrzahl, genus = 'n') {
+  const w = (ZAHLWORTE[genus === 'f' ? 'f' : 'm'][n] ?? String(n));
+  return `${w} ${n === 1 ? einzahl : mehrzahl}`;
+}
+
 export function zahlText(x, stellen = 0) {
   if (x == null || x === '' || isNaN(x)) return '';
   return Number(x).toLocaleString('de-DE', { maximumFractionDigits: stellen, minimumFractionDigits: 0 });

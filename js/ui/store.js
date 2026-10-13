@@ -62,7 +62,7 @@ export function migriere(f) {
   f.vorschenkungen = f.vorschenkungen || [];
   f.selbstnutzung = f.selbstnutzung || {};
   f.anfangsvermoegen = f.anfangsvermoegen || { a: '', b: '' };
-  f.versorgungsbezuege = f.versorgungsbezuege || { a: 0, b: 0 };
+  delete f.versorgungsbezuege; // früheres Feld, nicht mehr verwendet
   f.szenarien = f.szenarien || [];
   if (!f.szenarien.some((s) => s.basis)) f.szenarien.unshift({ id: neueId('sz'), name: 'Ohne Gestaltung', basis: true, schritte: [], erbfallOptionen: {} });
   for (const s of f.szenarien) { s.schritte = s.schritte || []; s.erbfallOptionen = s.erbfallOptionen || {}; }

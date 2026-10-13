@@ -6,7 +6,7 @@ import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer } from 
 import { sheetInhalt } from './ui/sheets.js';
 import { mandantenfassung } from './ui/mandant.js';
 import { icon } from './ui/icons.js';
-import { esc, euro, parseZahl, parseQuote, parseDatum } from './ui/format.js';
+import { esc, euro, parseZahl, parseQuote, parseDatum, anzahl } from './ui/format.js';
 import { neueId, tiefeKopie, addJahre } from './engine/util.js';
 
 const ANSICHTEN = [
@@ -90,7 +90,7 @@ function schrittNav(idx) {
 
 function renderNav(f) {
   const res = state.ansicht === 'vergleich' || state.ansicht === 'szenarien' ? ergebnisse(f) : null;
-  $('#fallwahl').innerHTML = `${icon('folder-open', 20)}<span class="t"><b>${esc(f.titel || 'Ohne Titel')}</b><span>${f.personen.length} Personen · ${f.vermoegen.length} Werte</span></span>${icon('chevron-down', 16)}`;
+  $('#fallwahl').innerHTML = `${icon('folder-open', 20)}<span class="t"><b>${esc(f.titel || 'Ohne Titel')}</b><span>${anzahl(f.personen.length, 'Person', 'Personen', 'f')} · ${anzahl(f.vermoegen.length, 'Wert', 'Werte')}</span></span>${icon('chevron-down', 16)}`;
   $('#navlist').innerHTML = ANSICHTEN.map(([k, t, ico], i) => {
     let badge = '';
     if (k === 'familie') badge = f.personen.length;

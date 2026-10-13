@@ -26,7 +26,7 @@ export function bereicherung(erwerb) {
 
 /**
  * Berechnet die Steuer eines Erwerbs unter Berücksichtigung der früheren, bereits berechneten Erwerbe
- * desselben Erwerbers vom selben Zuwendenden innerhalb von 10 Jahren.
+ * desselben Erwerbers vom selben Zuwendenden innerhalb von zehn Jahren.
  */
 export function berechneErwerb(fall, erwerb, frueher) {
   const b = bereicherung(erwerb);

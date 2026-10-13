@@ -54,13 +54,18 @@ export function ansichtFamilie(f) {
   };
   const neu = (rolle, text) => `<button type="button" class="neu-person" data-act="person-neu" data-rolle="${rolle}">${icon('plus', 20)}${esc(text)}</button>`;
 
+  // Personenreihe mittig; das Feld zum Hinzufügen steht rechts daneben und verschiebt die Mitte nicht.
+  const generation = (nr, liste, neuHtml) => (liste.length
+    ? `<div class="generation mit-neu" data-gen="${nr}"><div class="reihe">${liste.map((p) => karte(p)).join('')}<div class="neu-slot">${neuHtml}</div></div></div>`
+    : `<div class="generation" data-gen="${nr}">${neuHtml}</div>`);
+
   const baum = `
     <div class="stammbaum" id="stammbaum">
       <svg class="linien" id="linien" aria-hidden="true"></svg>
       <div class="generation" data-gen="0">${karte(A)}${B ? karte(B) : ''}</div>
-      <div class="generation" data-gen="1">${gen1.map((p) => karte(p)).join('')}${neu('kind', 'Kind hinzufügen')}</div>
-      ${gen1.some((p) => p.rolle === 'kind') ? `<div class="generation" data-gen="2">${enkel.map((p) => karte(p)).join('')}${neu('enkel', 'Enkel hinzufügen')}</div>` : ''}
-      ${urenkel.length ? `<div class="generation" data-gen="3">${urenkel.map((p) => karte(p)).join('')}${neu('urenkel', 'Urenkel hinzufügen')}</div>` : ''}
+      ${generation(1, gen1, neu('kind', 'Kind hinzufügen'))}
+      ${gen1.some((p) => p.rolle === 'kind') ? generation(2, enkel, neu('enkel', 'Enkel hinzufügen')) : ''}
+      ${urenkel.length ? generation(3, urenkel, neu('urenkel', 'Urenkel hinzufügen')) : ''}
     </div>`;
 
   const andere = `
@@ -78,7 +83,7 @@ export function ansichtFamilie(f) {
   const fbTabelle = empfaenger.length ? `
     <section class="abschnitt">
       <h2>Steuerklassen und Freibeträge</h2>
-      <p class="muted">Freibeträge alle 10 Jahre je Schenker. Bei Erwerben von Todes wegen kommen Versorgungsfreibeträge hinzu.</p>
+      <p class="muted">Freibeträge alle zehn Jahre je Schenker. Bei Erwerben von Todes wegen kommen Versorgungsfreibeträge hinzu.</p>
       <div class="tabellen-wrap"><table class="tabelle">
         <thead><tr><th>Person</th>${geber.map((g) => `<th>von ${esc(nameVon(f, g.id))}</th><th class="r">Freibetrag</th>`).join('')}</tr></thead>
         <tbody>${empfaenger.map((p) => `<tr class="klickbar" data-act="person-bearbeiten" data-id="${p.id}"><td>${esc(nameVon(f, p.id))}<div class="unter">${esc(alterText(p, f.stichtag))}</div></td>${geber.map((g) => {
@@ -97,7 +102,7 @@ export function ansichtFamilie(f) {
       lead: 'Wer gibt Vermögen weiter und wer soll es erhalten? Für jede Person genügen Vorname, Geburtsdatum und Geschlecht.',
       aktionen: segment('__ehepaar', f.geber.b ? 'ja' : 'nein', [['ja', 'Ehepaar'], ['nein', 'Einzelperson']])
     })}
-    ${fehlt ? `<div class="hinweis annahme" style="margin-bottom:16px">${icon('calendar', 20)}<div><div class="tt">${fehlt} Geburtsdatum${fehlt > 1 ? 'e fehlen' : ' fehlt'}</div><div class="tx">Das Alter bestimmt den Wert von Nießbrauch und Wohnungsrecht sowie die angenommene Lebenserwartung.</div></div></div>` : ''}
+    ${fehlt ? `<div class="hinweis annahme" style="margin-bottom:16px">${icon('calendar', 20)}<div><div class="tt">${fehlt === 1 ? 'Es fehlt noch ein Geburtsdatum' : `Es fehlen noch die Geburtsdaten (${fehlt}×)`}</div><div class="tx">Das Alter bestimmt den Wert von Nießbrauch und Wohnungsrecht sowie die angenommene Lebenserwartung.</div></div></div>` : ''}
     ${baum}
     ${andere}
     ${fbTabelle}`;
@@ -169,10 +174,6 @@ export function ansichtAusgangslage(f) {
           ${eurofeld(`Anfangsvermögen ${nameVon(f, f.geber.a)}`, 'anfangsvermoegen.a', f.anfangsvermoegen?.a)}
           ${eurofeld(`Anfangsvermögen ${nameVon(f, f.geber.b)}`, 'anfangsvermoegen.b', f.anfangsvermoegen?.b)}
         </div>
-        <div class="raster zwei">
-          ${eurofeld(`Versorgungsbezüge ${nameVon(f, f.geber.a)}`, 'versorgungsbezuege.a', f.versorgungsbezuege?.a, { hilfe: 'Kapitalwert steuerfreier Hinterbliebenenbezüge, kürzt den Versorgungsfreibetrag.' })}
-          ${eurofeld(`Versorgungsbezüge ${nameVon(f, f.geber.b)}`, 'versorgungsbezuege.b', f.versorgungsbezuege?.b)}
-        </div>
       </div>` : ''}
     </div>
 
@@ -184,7 +185,7 @@ export function ansichtAusgangslage(f) {
 
     <section class="abschnitt">
       <h2>Frühere Schenkungen</h2>
-      <p class="muted">Schenkungen der letzten 10 Jahre werden nach § 14 ErbStG mit späteren Erwerben zusammengerechnet.</p>
+      <p class="muted">Schenkungen der letzten zehn Jahre werden nach § 14 ErbStG mit späteren Erwerben zusammengerechnet.</p>
       ${f.vorschenkungen.length ? `<div class="tabellen-wrap"><table class="tabelle"><thead><tr><th>Datum</th><th>Von</th><th>An</th><th>Gegenstand</th><th class="r">Wert</th><th class="r">Gezahlte Steuer</th></tr></thead><tbody>
         ${f.vorschenkungen.map((v, i) => `<tr class="klickbar" data-act="vorschenkung-bearbeiten" data-index="${i}"><td class="num">${datum(v.datum)}</td><td>${esc(nameVon(f, v.von))}</td><td>${esc(nameVon(f, v.an))}</td><td>${esc(v.text || '')}</td><td class="r num">${euro(v.wert)}</td><td class="r num">${euro(v.steuer || 0)}</td></tr>`).join('')}
       </tbody></table></div>` : ''}

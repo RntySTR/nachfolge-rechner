@@ -10,7 +10,6 @@ export function beispielfall() {
     gueterstand: 'zugewinn',
     heirat: '1980-06-14',
     anfangsvermoegen: { a: 60000, b: 15000 },
-    versorgungsbezuege: { a: 0, b: 0 },
     personen: [
       { id: 'p_a', vorname: 'Peter', geburt: '1951-05-14', geschlecht: 'm', rolle: 'geber' },
       { id: 'p_b', vorname: 'Maria', geburt: '1953-09-02', geschlecht: 'w', rolle: 'geber' },
