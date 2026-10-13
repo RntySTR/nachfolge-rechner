@@ -520,43 +520,60 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
   body { font-size: 11pt; }
 }
 
-/* Mandantenfassung: auf dem Bildschirm unsichtbar, im Druck anstelle der App */
+/* Druckfassung: auf dem Bildschirm unsichtbar, im Druck anstelle der App; genau eine A4-Seite */
 .druckfassung { display: none; }
-@page { size: A4; margin: 18mm 16mm 18mm; }
+@page { size: A4; margin: 12mm 13mm; }
 @media print {
   body.druck-mandant .app, body.druck-mandant .sheet, body.druck-mandant .sheet-hg, body.druck-mandant .toast { display: none !important; }
   body.druck-mandant .druckfassung { display: block; }
-  body.druck-mandant { font-size: 10.5pt; line-height: 1.5; color: #1b2328; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.druck-mandant { font-size: 9pt; line-height: 1.4; color: #1b2328; background: #fff; }
 }
-.dr h1 { font-size: 26pt; margin: 4px 0 6px; }
-.dr h2 { font-size: 14pt; margin: 0 0 8px; break-after: avoid; }
-.dr h3 { font-size: 11pt; margin: 14px 0 6px; break-after: avoid; }
-.dr-marke { font: 600 8.5pt/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--brand); }
-.dr-kopf { padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
-.dr-klein { font-size: 9pt; color: var(--muted); margin-top: 4px; }
-.dr-lead { margin-bottom: 8px; }
-.dr-personen { display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; margin: 12px 0 0; font-size: 10pt; }
+.druckfassung, .druckfassung * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.druckfassung.messen { display: block; position: absolute; left: -10000px; top: 0; width: 184mm; visibility: hidden; font-size: 9pt; line-height: 1.4; }
+.dr { zoom: var(--dr-zoom, 1); width: calc(100% / var(--dr-zoom, 1)); }
+.dr h1 { font-size: 17pt; margin: 3px 0 2px; }
+.dr h2 { font-size: 10.5pt; margin: 0 0 5px; break-after: avoid; }
+.dr-marke { font: 600 7.5pt/1 var(--font-display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--brand); }
+.dr-kopf { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding-bottom: 8px; border-bottom: 1.5px solid var(--brand); margin-bottom: 12px; }
+.dr-klein { font-size: 8pt; color: var(--muted); margin: 2px 0 0; }
+.dr-personen { display: grid; grid-template-columns: max-content 1fr; gap: 1px 10px; margin: 0; font-size: 8pt; max-width: 60%; }
 .dr-personen dt { color: var(--muted); }
 .dr-personen dd { margin: 0; }
-.dr-block { margin-bottom: 20px; }
-.dr-sz { break-inside: auto; padding-top: 4px; }
-.dr-tab { width: 100%; border-collapse: collapse; font-size: 10pt; }
-.dr-tab th { text-align: left; font-weight: 500; color: var(--muted); font-size: 9pt; border-bottom: 1px solid var(--border); padding: 4px 8px 4px 0; }
-.dr-tab td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-.dr-tab { break-inside: avoid; }
-.dr-tab th.r, .dr-tab td.r { text-align: right; padding-left: 16px; padding-right: 0; font-variant-numeric: tabular-nums; }
-.dr-tab td.r { white-space: nowrap; }
-.dr-lead, .dr h3 + .dr-klein { break-after: avoid; }
+.dr-block { margin-bottom: 12px; }
+.dr-spalten { display: grid; grid-template-columns: 5fr 7fr; gap: 10mm; align-items: start; }
+.dr-spalten > .dr-block:only-child { grid-column: 1 / -1; }
+.dr-tab { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+.dr-tab th { text-align: left; font-weight: 500; color: var(--muted); font-size: 7.5pt; border-bottom: 1px solid var(--border); padding: 2px 6px 3px 0; }
+.dr-tab td { padding: 3px 6px 3px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.dr-tab th.r, .dr-tab td.r { text-align: right; padding-left: 8px; padding-right: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dr-tab tr { break-inside: avoid; }
 .dr-tab tr.summe td { font-weight: 600; color: var(--ink); border-bottom: 0; border-top: 1px solid var(--border); }
-.dr-tab tr.beste td { background: var(--brand-tint); font-weight: 500; color: var(--ink); }
-.dr-ablauf { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
-.dr-ablauf li { display: grid; grid-template-columns: 24mm 1fr; gap: 10px; break-inside: avoid; }
-.dr-datum { font: 500 9.5pt/1.5 var(--font-display); color: var(--brand); }
-.dr-ablauf p { margin: 2px 0 0; }
-.dr-annahmen ul { margin: 0; padding-left: 18px; font-size: 9.5pt; color: var(--muted); }
-.dr-annahmen li + li { margin-top: 3px; }
-.dr-impressum { margin-top: 24px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 9pt; color: var(--muted); }
+.dr-tab tr.beste td { background: var(--brand-tint); }
+.dr-ueb td.name { width: 27%; color: var(--ink); font-weight: 500; }
+.dr-ueb td.name small { display: block; font: 400 7.5pt/1.3 var(--font-text); color: var(--muted); }
+.dr-ueb td.bar { width: 36%; padding-right: 10px; }
+.dr-ueb td.r:last-child, .dr-ueb td.r:nth-last-child(2) { font-weight: 500; }
+.dr-balken { display: flex; height: 11px; gap: 1px; min-width: 2px; }
+.dr-balken.leer { background: var(--line); width: 2px; }
+.dr-balken i { display: block; flex-basis: 0; min-width: 1px; }
+.dr-balken i:first-child { border-radius: 2px 0 0 2px; }
+.dr-balken i:last-child { border-radius: 0 2px 2px 0; }
+.dr-balken i.l, .dr-legende i.l { background: var(--p3); }
+.dr-balken i.e, .dr-legende i.e { background: var(--brand); }
+.dr-balken i.k, .dr-legende i.k { background: var(--p2); }
+.dr-legende { display: flex; flex-wrap: wrap; gap: 3px 14px; margin-top: 6px; font-size: 7.5pt; color: var(--muted); }
+.dr-legende span { display: inline-flex; align-items: center; gap: 5px; }
+.dr-legende i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+.dr-ablauf { list-style: none; margin: 4px 0 0; padding: 0; }
+.dr-ablauf li { display: grid; grid-template-columns: 17mm 1fr 30mm; gap: 8px; padding: 2.5px 0; border-bottom: 1px solid var(--line); font-size: 8.5pt; break-inside: avoid; }
+.dr-datum { font: 500 8pt/1.4 var(--font-display); color: var(--brand); }
+.dr-betrag { text-align: right; font-size: 8pt; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dr-text { display: block; margin-top: 1px; line-height: 1.3; }
+.dr-hinweise { margin-top: 6px; }
+.dr-annahmen { margin-bottom: 6px; }
+.dr-annahmen ul { margin: 0; padding-left: 14px; font-size: 7.5pt; line-height: 1.35; color: var(--muted); }
+.dr-annahmen li + li { margin-top: 2px; }
+.dr-impressum { padding-top: 5px; border-top: 1px solid var(--line); font-size: 8pt; color: var(--muted); }
 .dr-impressum b { font-weight: 500; color: var(--text); }
 
 /* Belastung nach Herkunft */

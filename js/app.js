@@ -391,16 +391,8 @@ const AKTIONEN = {
   reihenfolge: (d) => { state.detail.reihenfolge = d.id; render(); },
   tab: (d) => { state.detail.tab = d.id; render(); },
   'erwerb-umschalten': (d) => { state.detail.offen[d.id] = !state.detail.offen[d.id]; render(); },
-  drucken: () => { druckZuruecksetzen(); window.print(); },
-  'drucken-mandant': () => {
-    const f = fall();
-    const res = ergebnisse(f);
-    if (res.fehlt) { toast('Für die Mandantenfassung fehlen Angaben'); return; }
-    $('#druck').innerHTML = mandantenfassung(f, res);
-    document.body.classList.add('druck-mandant');
-    window.addEventListener('afterprint', druckZuruecksetzen, { once: true });
-    window.print();
-  },
+  drucken: () => druckeEineSeite(true),
+  'drucken-mandant': () => druckeEineSeite(false),
 
   'fall-oeffnen': (d) => { state.aktivId = d.id; state.sheet = null; speichern(); render(); },
   'fall-neu': (d) => { neuerFall({ ehepaar: d.ehepaar === '1' }); state.sheet = null; render(); },
@@ -416,7 +408,28 @@ const AKTIONEN = {
 
 function druckZuruecksetzen() {
   document.body.classList.remove('druck-mandant');
-  $('#druck').innerHTML = '';
+  const d = $('#druck');
+  d.classList.remove('messen');
+  d.innerHTML = '';
+}
+
+/** Druckfassung aufbauen und so verkleinern, dass sie auf genau eine A4-Seite passt. */
+function druckeEineSeite(intern) {
+  const f = fall();
+  const res = ergebnisse(f);
+  if (res.fehlt) { toast('Für die Druckansicht fehlen Angaben'); return; }
+  const d = $('#druck');
+  d.innerHTML = mandantenfassung(f, res, { intern });
+  const dr = d.querySelector('.dr');
+  d.classList.add('messen');
+  dr.style.setProperty('--dr-zoom', '1');
+  const verfuegbar = 1000; // nutzbare Seitenhöhe in CSS-Pixeln (A4 abzüglich Ränder, mit Reserve)
+  const zoom = Math.max(0.5, Math.min(1, verfuegbar / Math.max(1, dr.getBoundingClientRect().height)));
+  dr.style.setProperty('--dr-zoom', String(Math.floor(zoom * 100) / 100));
+  d.classList.remove('messen');
+  document.body.classList.add('druck-mandant');
+  window.addEventListener('afterprint', druckZuruecksetzen, { once: true });
+  window.print();
 }
 
 function confirmen(text) {
