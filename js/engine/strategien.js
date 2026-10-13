@@ -18,6 +18,37 @@ function normiere(o) {
   return Object.fromEntries(Object.entries(o).filter(([, x]) => Number(x) > 0).map(([k, x]) => [k, Number(x) / s]));
 }
 
+const VOLLJAEHRIG = 18;
+const HORIZONT_UEBER_LEBENSERWARTUNG = 10;
+
+function istMinderjaehrig(fall, id, datum) {
+  const a = alter(personMap(fall).get(id)?.geburt, datum);
+  return a != null && a < VOLLJAEHRIG;
+}
+
+/** Späteste Übertragung zu Lebzeiten: statistische Lebenserwartung zuzüglich zehn Jahre. */
+function spaetesterZeitpunkt(fall, id) {
+  const p = personMap(fall).get(id);
+  const ex = lebenserwartung(p?.geschlecht, alter(p?.geburt, fall.stichtag) ?? 75);
+  return addJahre(fall.stichtag, ex + HORIZONT_UEBER_LEBENSERWARTUNG);
+}
+
+/**
+ * Lebzeitige Übertragungen eines Vorschlags dürfen weder an Minderjährige (am Tag der Übertragung)
+ * gehen noch zu einem Zeitpunkt liegen, der mehr als zehn Jahre über der Lebenserwartung des Gebers liegt.
+ */
+function uebertragungenZulaessig(fall, schritte) {
+  for (const s of schritte) {
+    if (s.typ === 'schenkung') {
+      if (s.datum > spaetesterZeitpunkt(fall, s.von)) return false;
+      if (Object.keys(s.empfaenger || {}).some((id) => istMinderjaehrig(fall, id, s.datum))) return false;
+    } else if (s.typ === 'gueterstand') {
+      if (geberListe(fall).some((g) => s.datum > spaetesterZeitpunkt(fall, g))) return false;
+    }
+  }
+  return true;
+}
+
 function lebend(fall) {
   return fall.personen.filter((p) => !p.vorverstorben);
 }
@@ -481,7 +512,8 @@ function bausteinAusschlagung(fall) {
 
 function bausteinEnkel(fall) {
   const nb = fall.ziel?.nebenbedingungen || {};
-  const enkel = lebend(fall).filter((p) => p.rolle === 'enkel').map((p) => p.id);
+  // Schenkungen nur an volljährige Enkel (Stand zum Zeitpunkt der Übertragung, drei Monate nach dem Stichtag)
+  const enkel = lebend(fall).filter((p) => p.rolle === 'enkel' && !istMinderjaehrig(fall, p.id, addJahre(fall.stichtag, 3 / 12))).map((p) => p.id);
   if (!nb.enkelEinbeziehen || !enkel.length) return null;
   const schritte = [];
   const texte = [];
@@ -552,6 +584,7 @@ export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
     if (kombi.includes('P') && (!berliner || kombi.includes('T'))) return;
     const teile = kombi.map((key) => verfuegbar[key]);
     const schritte = teile.flatMap((b) => b.schritte(d));
+    if (!uebertragungenZulaessig(fall, schritte)) return;
     const erbfallOptionen = Object.assign({}, ...teile.map((b) => b.erbfallOptionen || {}));
     const sig = JSON.stringify([schritte.map((s) => [s.typ, s.von, s.datum, s.gegenstaende, s.empfaenger, s.form, s.gegenleistungen?.map((g) => [g.assetId, g.quote])]), erbfallOptionen]);
     if (gesehen.has(sig)) return;

@@ -230,3 +230,24 @@ test('Schenkung in Tranchen: erster Teil nutzt die Freibeträge auch bei mehrere
     for (const t of x.module.filter((m) => m.key === 'S2').flatMap((m) => m.texte)) assert.ok(!/ 0 % /.test(t), t);
   }
 });
+
+test('Vorschläge: keine Übertragung an Minderjährige und keine nach Lebenserwartung plus zehn Jahre', async () => {
+  const { vorschlaege } = await import('../js/engine/strategien.js');
+  const { lebenserwartung } = await import('../js/engine/bewertung.js');
+  const { alter, addJahre } = await import('../js/engine/util.js');
+  const fall = ungleicherFall();
+  fall.personen.find((p) => p.id === 'K2').geburt = '2015-08-08'; // minderjährig
+  fall.ziel.nebenbedingungen.enkelEinbeziehen = true;
+  fall.personen.push({ id: 'E1', vorname: 'Mia', geburt: '2014-01-01', geschlecht: 'w', rolle: 'enkel', bezug: { elternId: 'K1' } });
+  fall.vermoegen.push({ id: 'D', bezeichnung: 'Depot', art: 'depot', verkehrswert: 400000, eigentum: { F: 1 } });
+  const pm = new Map(fall.personen.map((p) => [p.id, p]));
+  const v = vorschlaege(fall, { maxAnzahl: 12 });
+  for (const x of v.liste) {
+    for (const s of x.szenario.schritte.filter((st) => st.typ === 'schenkung')) {
+      for (const id of Object.keys(s.empfaenger)) assert.ok(alter(pm.get(id).geburt, s.datum) >= 18, `${id} minderjährig am ${s.datum}`);
+      const g = pm.get(s.von);
+      const grenze = addJahre(fall.stichtag, lebenserwartung(g.geschlecht, alter(g.geburt, fall.stichtag)) + 10);
+      assert.ok(s.datum <= grenze, `Schenkung ${s.datum} nach ${grenze}`);
+    }
+  }
+});
