@@ -7,6 +7,7 @@ import { berechneErwerb } from '../js/engine/erwerb.js';
 import { gesetzlicheErbquoten, steuerklasse } from '../js/engine/personen.js';
 import { simuliere, simuliereBeide } from '../js/engine/plan.js';
 import { wahrscheinlichkeitErster } from '../js/engine/wahrscheinlichkeit.js';
+import { RECHTSSTAND as R } from '../js/engine/rechtsstand.js';
 import { beispielfall } from '../js/data/beispiel.js';
 
 test('Tarif § 19 ErbStG mit Härteausgleich', () => {
@@ -20,8 +21,10 @@ test('Tarif § 19 ErbStG mit Härteausgleich', () => {
   assert.equal(steuerNachTarif('I', 100049), 11000);          // Abrundung auf volle 100 €
 });
 
-test('GNotKG Tabelle B (abgeglichen mit Kostenmodul)', () => {
+test('GNotKG Tabelle B (abgeglichen mit Anlage 2, KostBRÄG 2025)', () => {
   assert.equal(gebuehrTabelleB(500), 15);
+  assert.equal(gebuehrTabelleB(185000), 408);
+  assert.equal(gebuehrTabelleB(3000000), 4935);
   assert.equal(gebuehrTabelleB(501), 19);
   assert.equal(gebuehrTabelleB(12345), 83);
   assert.equal(gebuehrTabelleB(1000000), 1735);
@@ -158,4 +161,9 @@ test('Datumseingabe', async () => {
   assert.equal(parseDatum('8.4.1950'), '1950-04-08');
   assert.equal(parseDatum('31.02.2020'), null);
   assert.equal(parseDatum('0019'), null);
+});
+
+test('Festgebühren KV 12100/12101 nach KostBRÄG 2025', () => {
+  assert.equal(R.gnotkg.testamentVerwahrung, 82);
+  assert.equal(R.gnotkg.eroeffnung, 109);
 });

@@ -65,13 +65,14 @@ export const RECHTSSTAND = {
   standardRendite: 0.03,
 
   // GNotKG
-  // Offen: Festgebühren und Tabelle B sind noch nicht gegen das KostBRÄG 2025 (BGBl. 2025 I Nr. 109, in Kraft 1.6.2025)
-  // abgeglichen. Die Werte stammen aus dem Kostenmodul des Kanzleisystems.
+  // Stand KostBRÄG 2025 (BGBl. 2025 I Nr. 109, Art. 7, in Kraft seit 1.6.2025). Tabelle B (Anlage 2 zu § 34 Abs. 3
+  // GNotKG) ist Zeile für Zeile gegen den Regelungstext abgeglichen (92 Stufen, keine Abweichung). KV 12100 und 12101
+  // sind dort angehoben worden; KV 14143 und die Auslagen (32000 ff.) werden von der Änderung nicht erfasst.
   gnotkg: {
     ust: 0.19,
     ztr: 12.5,                  // Registrierung ZTR je Erblasser (durchlaufender Posten)
-    testamentVerwahrung: 75,    // KV 12100
-    eroeffnung: 100,            // KV 12101
+    testamentVerwahrung: 82,    // KV 12100 (bis 31.5.2025: 75 €)
+    eroeffnung: 109,            // KV 12101 (bis 31.5.2025: 100 €)
     loeschungAbtII: 25,         // KV 14143
     auslagenPost: 20,           // KV 32005
     dokumentenpauschale: 30,    // KV 32000 ff., pauschal geschätzt
