@@ -167,3 +167,66 @@ test('Festgebühren KV 12100/12101 nach KostBRÄG 2025', () => {
   assert.equal(R.gnotkg.testamentVerwahrung, 82);
   assert.equal(R.gnotkg.eroeffnung, 109);
 });
+
+// Fiktive Konstellation: ein Ehegatte hält fast das gesamte übertragbare Vermögen, der andere nur Hälften.
+function ungleicherFall() {
+  const haelfte = { F: 0.5, M: 0.5 };
+  return {
+    version: 1, id: 't', stichtag: '2026-10-12', geber: { a: 'F', b: 'M' }, gueterstand: 'zugewinn', heirat: '1979-05-01', anfangsvermoegen: { a: 0, b: 0 },
+    personen: [
+      { id: 'F', vorname: 'Ruth', geburt: '1950-02-11', geschlecht: 'w', rolle: 'geber' },
+      { id: 'M', vorname: 'Karl', geburt: '1949-09-30', geschlecht: 'm', rolle: 'geber' },
+      { id: 'K1', vorname: 'Ida', geburt: '1980-03-03', geschlecht: 'w', rolle: 'kind', bezug: { eltern: ['a', 'b'] } },
+      { id: 'K2', vorname: 'Olaf', geburt: '1983-08-08', geschlecht: 'm', rolle: 'kind', bezug: { eltern: ['a', 'b'] } }
+    ],
+    vermoegen: [
+      { id: 'A', bezeichnung: 'Wohnhaus Nord', art: 'immobilie', nutzung: 'vermietet_gewerbe', verkehrswert: 1600000, jahresertrag: 70000, eigentum: { F: 1 } },
+      { id: 'B', bezeichnung: 'Wohnhaus Süd', art: 'immobilie', nutzung: 'vermietet_gewerbe', verkehrswert: 1200000, jahresertrag: 40000, eigentum: { F: 1 } },
+      { id: 'H', bezeichnung: 'Familienheim', art: 'immobilie', nutzung: 'familienheim', verkehrswert: 700000, wohnflaeche: 140, eigentum: { ...haelfte } },
+      { id: 'W', bezeichnung: 'Wohnung', art: 'immobilie', nutzung: 'vermietet_gewerbe', verkehrswert: 500000, jahresertrag: 18000, eigentum: { ...haelfte } }
+    ],
+    selbstnutzung: { F: true, M: true }, vorschenkungen: [],
+    verfuegungen: { a: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { K1: 0.5, K2: 0.5 }, vermaechtnisse: [] }, b: { typ: 'alleinerbe_ehegatte', form: 'notariell', schlusserben: { K1: 0.5, K2: 0.5 }, vermaechtnisse: [] } },
+    ziel: { modus: 'quote', quoten: { K1: 0.5, K2: 0.5 }, assets: {}, nebenbedingungen: { laengerlebenderAbgesichert: true, keineSchaukel: true } },
+    annahmen: { todesannahme: 'statistisch' },
+    szenarien: [{ id: 'b', name: 'Ohne Gestaltung', basis: true, schritte: [], erbfallOptionen: {} }]
+  };
+}
+
+test('Vorschläge: Vermögensausgleich unter Ehegatten mit Gegenleistung', async () => {
+  const { vorschlaege } = await import('../js/engine/strategien.js');
+  const fall = ungleicherFall();
+  const v = vorschlaege(fall);
+  const mitV = v.liste.filter((x) => x.module.some((m) => m.key === 'V'));
+  const ohneV = v.liste.filter((x) => !x.module.some((m) => m.key === 'V'));
+  assert.ok(mitV.length > 0, 'Ausgleich wird vorgeschlagen');
+  assert.ok(v.liste[0].module.some((m) => m.key === 'V'), 'Ausgleich ist der günstigste Vorschlag');
+  if (ohneV.length) assert.ok(mitV[0].ergebnis.erwartet < ohneV[0].ergebnis.erwartet);
+  const schritt = mitV[0].szenario.schritte.find((s) => s.titel === 'Vermögensausgleich unter Ehegatten');
+  assert.equal(schritt.von, 'F');
+  assert.ok(schritt.gegenleistungen.some((g) => g.assetId === 'H' && g.vonId === 'M'), 'Familienheim-Anteil als Gegenleistung');
+  assert.ok(!schritt.gegenstaende.some((g) => schritt.gegenleistungen.some((h) => h.assetId === g.assetId)), 'kein Gegenstand in beide Richtungen');
+  // Weitergabe durch den anderen Ehegatten: bestehender Nießbrauch wird übernommen, nicht doppelt abgezogen
+  const weiter = mitV[0].szenario.schritte.filter((s) => s.von === 'M' && s.typ === 'schenkung');
+  assert.ok(weiter.some((s) => s.nutzung.berechtigte[0] === 'F'));
+  for (const s of weiter.filter((x) => x.nutzung.berechtigte[0] === 'F')) {
+    assert.ok(Date.parse(s.datum) - Date.parse(schritt.datum) > 366 * 86400000, 'Weitergabe mit Abstand von mehr als einem Jahr');
+  }
+  const lauf = mitV[0].ergebnis.laeufe[0];
+  const e = lauf.erwerbe.find((x) => x.schrittId === schritt.id);
+  assert.ok(e.bereicherung <= 500000 + 1, `Ehegattenerwerb ${e.bereicherung}`);
+  for (const s of weiter) {
+    for (const x of lauf.erwerbe.filter((y) => y.schrittId === s.id)) {
+      const lasten = x.positionen.flatMap((p) => p.lasten).filter((l) => l.norm === '§§ 14, 16 BewG');
+      assert.ok(lasten.length <= x.positionen.length, 'je Position höchstens ein Nießbrauch');
+    }
+  }
+});
+
+test('Schenkung in Tranchen: erster Teil nutzt die Freibeträge auch bei mehreren Gegenständen', async () => {
+  const { vorschlaege } = await import('../js/engine/strategien.js');
+  const v = vorschlaege(ungleicherFall(), { maxAnzahl: 8 });
+  for (const x of v.liste) {
+    for (const t of x.module.filter((m) => m.key === 'S2').flatMap((m) => m.texte)) assert.ok(!/ 0 % /.test(t), t);
+  }
+});

@@ -210,8 +210,9 @@ function vorschlagsBereich(f, res) {
   // Bausteine über alle Vorschläge: gemeinsame zuerst, dann nach Häufigkeit
   const module = new Map();
   v.liste.forEach((x, i) => x.module.forEach((m) => {
-    if (!module.has(m.key)) module.set(m.key, { ...m, in: new Set(), pos: module.size });
+    if (!module.has(m.key)) module.set(m.key, { ...m, in: new Set(), pos: module.size, textJe: new Map() });
     module.get(m.key).in.add(i);
+    module.get(m.key).textJe.set(i, m.texte);
   }));
   const reihen = [...module.values()].sort((p, q) => q.in.size - p.in.size || p.pos - q.pos);
   const gemeinsam = n > 1 ? reihen.filter((m) => m.in.size === n) : [];
@@ -223,7 +224,14 @@ function vorschlagsBereich(f, res) {
     return `<tr class="bs-zeile${offen ? ' offen' : ''}">
       <th scope="row"><button type="button" class="bs-name" data-act="baustein-umschalten" data-id="${m.key}" aria-expanded="${offen}">${icon(offen ? 'chevron-down' : 'chevron-right', 16)}<span>${esc(m.titel)}</span></button></th>
       ${v.liste.map((_, i) => `<td class="bs-zelle">${m.in.has(i) ? '<span class="bs-punkt" role="img" aria-label="enthalten"></span>' : '<span class="bs-leer" aria-label="nicht enthalten">–</span>'}</td>`).join('')}
-    </tr>${offen ? `<tr class="bs-text"><td colspan="${spalten}"><ul>${m.texte.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></td></tr>` : ''}`;
+    </tr>${offen ? `<tr class="bs-text"><td colspan="${spalten}">${bausteinTexte(m)}</td></tr>` : ''}`;
+  };
+  // Gleicher Baustein mit unterschiedlichem Inhalt (z. B. andere Quote): Texte je Vorschlag zeigen
+  const bausteinTexte = (m) => {
+    const je = [...m.textJe.entries()];
+    const gleich = je.every(([, t]) => JSON.stringify(t) === JSON.stringify(je[0][1]));
+    const liste = (t) => `<ul>${t.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+    return gleich ? liste(je[0][1]) : je.map(([i, t]) => `<div class="bs-je"><div class="lbl">Vorschlag ${i + 1}</div>${liste(t)}</div>`).join('');
   };
   const gruppe = (titel, liste) => (liste.length ? `<tr class="bs-gruppe"><th colspan="${spalten}">${titel}</th></tr>${liste.map(bausteinZeile).join('')}` : '');
   const kopfZellen = v.liste.map((x, i) => `<th scope="col" class="vs-spalte${i === 0 ? ' erste' : ''}"><span class="vs-nr">Vorschlag ${i + 1}</span><span class="vs-fig num">− ${euro(x.ersparnis)}</span><span class="vs-lbl">weniger Steuern und Kosten</span></th>`).join('');

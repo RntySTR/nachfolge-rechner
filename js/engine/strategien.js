@@ -5,8 +5,8 @@
 import { bewerteSzenario, kontextFuer, zielStatus } from './auswertung.js';
 import { simuliere, fmtEuro, fmtQuote } from './plan.js';
 import { ehegatte, personMap, steuerklasse, name } from './personen.js';
-import { lebenserwartung } from './bewertung.js';
-import { addJahre, alter, neueId, summe } from './util.js';
+import { lebenserwartung, jahreswertNutzung, kapitalwertLebenslang } from './bewertung.js';
+import { addJahre, alter, innerhalbJahre, neueId, summe, tiefeKopie } from './util.js';
 import { RECHTSSTAND as R } from './rechtsstand.js';
 
 const vw = (a) => Number(a.verkehrswert) || 0;
@@ -124,33 +124,46 @@ export function uebertragbar(fall, a) {
   return !(fall.ziel?.nebenbedingungen?.nichtUebertragen || []).includes(a.id);
 }
 
+/** Für eine Schenkung zu Lebzeiten geeignet: vermietete oder sonstige Immobilie (nicht Familienheim), Depot. */
+function istSchenkungsgut(fall, a) {
+  return uebertragbar(fall, a) && ((a.art === 'immobilie' && a.nutzung !== 'familienheim') || a.art === 'depot');
+}
+
 function schenkungsKandidaten(fall) {
   const res = [];
   for (const g of geberListe(fall)) {
     for (const a of fall.vermoegen) {
-      const q = Number(a.eigentum?.[g] || 0);
-      if (q <= 0 || !uebertragbar(fall, a)) continue;
-      if (!(a.art === 'immobilie' && a.nutzung !== 'familienheim') && a.art !== 'depot') continue;
-      if (vw(a) * q < 100000) continue;
+      const qGesamt = Number(a.eigentum?.[g] || 0);
+      if (qGesamt <= 0 || !istSchenkungsgut(fall, a)) continue;
       const ziel = zielVerteilung(fall, a.id);
       const empf = Object.fromEntries(Object.entries(ziel).filter(([id]) => id !== ehegatte(fall, g)));
       if (!Object.keys(empf).length) continue;
-      res.push({ g, a, q, empf: normiere(empf) });
+      // Anteile aus dem Vermögensausgleich tragen bereits den Nießbrauch des Ehegatten
+      const aus = a._ausgleich?.[g];
+      const teile = aus ? [[aus.quote, aus.von], [qGesamt - aus.quote, null]] : [[qGesamt, null]];
+      for (const [q, vorbehalt] of teile) {
+        if (q <= 1e-6 || vw(a) * q < 100000) continue;
+        // Bruchteile desselben Eigentümers verschmelzen: hat er im Ausgleich einen Anteil erhalten,
+        // gibt er auch seinen bisherigen Anteil erst mit Abstand weiter (Kettenschenkung)
+        res.push({ g, a, q, empf: normiere(empf), vorbehalt, spaet: !!aus });
+      }
     }
   }
   return res;
 }
 
-function schenkungsSchritt(fall, { g, a, quote, empf, datum, titel }) {
+function schenkungsSchritt(fall, { g, a, quote, empf, datum, titel, vorbehalt }) {
   const nb = fall.ziel?.nebenbedingungen || {};
   const ehe = ehegatte(fall, g);
   // Folgenießbrauch des Ehegatten (Zuwendungsnießbrauch) nur bei Grundbesitz; bei Depots ertragsteuerlich ungünstig
   const nachfolger = ehe && a.art === 'immobilie' && nb.laengerlebenderAbgesichert !== false && !personMap(fall).get(ehe)?.vorverstorben ? [ehe] : [];
+  // Besteht schon ein Nießbrauch des Ehegatten (Vermögensausgleich), wird er übernommen und der Schenker folgt nach
+  const berechtigte = vorbehalt ? [vorbehalt, ...(nb.laengerlebenderAbgesichert !== false ? [g] : [])] : [g, ...nachfolger];
   return {
     id: neueId('st'), typ: 'schenkung', datum, titel, von: g,
     gegenstaende: [{ assetId: a.id, quote }],
     empfaenger: { ...empf },
-    nutzung: { typ: 'niessbrauch', berechtigte: [g, ...nachfolger], modus: 'sukzessiv', quote: 1 },
+    nutzung: { typ: 'niessbrauch', berechtigte, modus: 'sukzessiv', quote: 1 },
     gegenleistungen: [], rueckforderungsrecht: true
   };
 }
@@ -158,32 +171,41 @@ function schenkungsSchritt(fall, { g, a, quote, empf, datum, titel }) {
 function bausteinSchenkung(fall, kandidaten) {
   if (!kandidaten.length) return null;
   const nb = fall.ziel?.nebenbedingungen || {};
-  const texte = kandidaten.map(({ g, a, q, empf }) =>
-    `${name(fall, g)} überträgt ${q < 1 ? `${pron(fall, g).seinen} Anteil (${fmtQuote(q)}) am` : 'das'} „${a.bezeichnung || 'Vermögen'}“ jetzt an ${namen(fall, Object.keys(empf))} und behält sich den Nießbrauch vor${ehegatte(fall, g) && a.art === 'immobilie' && nb.laengerlebenderAbgesichert !== false ? `; nach ${pron(fall, g).seinem} Tod steht er ${name(fall, ehegatte(fall, g))} zu (Zuwendungsnießbrauch, ertragsteuerlich gesondert zu prüfen)` : ''}.`);
+  const texte = kandidaten.map(({ g, a, q, empf, vorbehalt }) => vorbehalt
+    ? `${name(fall, g)} überträgt den im Vermögensausgleich erhaltenen Anteil (${fmtQuote(q)}) am „${a.bezeichnung || 'Vermögen'}“ an ${namen(fall, Object.keys(empf))}; der Nießbrauch von ${name(fall, vorbehalt)} bleibt bestehen${nb.laengerlebenderAbgesichert !== false ? `, ${name(fall, g)} erhält einen Nießbrauch für die Zeit nach ${pron(fall, vorbehalt).seinem} Tod` : ''}.`
+    : `${name(fall, g)} überträgt ${q < 1 ? `${pron(fall, g).seinen} Anteil (${fmtQuote(q)}) am` : 'das'} „${a.bezeichnung || 'Vermögen'}“ jetzt an ${namen(fall, Object.keys(empf))} und behält sich den Nießbrauch vor${ehegatte(fall, g) && a.art === 'immobilie' && nb.laengerlebenderAbgesichert !== false ? `; nach ${pron(fall, g).seinem} Tod steht er ${name(fall, ehegatte(fall, g))} zu (Zuwendungsnießbrauch, ertragsteuerlich gesondert zu prüfen)` : ''}.`);
   texte.push('Der Kapitalwert des Nießbrauchs mindert die Schenkung. Nach zehn Jahren stehen die Freibeträge erneut zur Verfügung; ein Rückforderungsrecht sichert die Schenker ab.');
   return {
     key: 'S',
     titel: 'Schenkung unter Nießbrauchsvorbehalt',
     texte,
-    schritte: (d) => kandidaten.map((k) => schenkungsSchritt(fall, { ...k, quote: k.q, datum: d.schenkung, titel: `Überlassung ${k.a.bezeichnung || ''}`.trim() }))
+    schritte: (d) => kandidaten.map((k) => schenkungsSchritt(fall, { ...k, quote: k.q, datum: k.spaet ? d.weitergabe : d.schenkung, titel: `Überlassung ${k.a.bezeichnung || ''}`.trim() }))
   };
 }
 
 /** Schenkung in zwei Tranchen: heute bis zur Höhe der Freibeträge, Rest nach Ablauf von zehn Jahren. */
-function bausteinTranchen(fall, kandidaten, d) {
+function bausteinTranchen(fall, kandidaten, d, vorSchritte = []) {
   if (!kandidaten.length) return null;
   const pm = personMap(fall);
+  const datumVon = (k) => (k.spaet ? d.weitergabe : d.schenkung);
   // Probelauf mit vollständiger Übertragung, um die Bereicherung je Erwerber zu ermitteln
-  const probe = { id: 'probe', schritte: kandidaten.map((k) => schenkungsSchritt(fall, { ...k, quote: k.q, datum: d.schenkung })) };
+  const probe = { id: 'probe', schritte: [...vorSchritte, ...kandidaten.map((k) => schenkungsSchritt(fall, { ...k, quote: k.q, datum: datumVon(k) }))] };
   let lauf;
   try { lauf = simuliere(fall, probe, { annahme: 'statistisch', ohneKettenpruefung: true }); } catch (e) { return null; }
+  // Faktor je Schenker: Anteil der Übertragung, der bei allen Erwerbern in den Freibetrag passt.
+  // Mehrere Gegenstände an denselben Erwerber am selben Tag werden zusammengerechnet.
   const quoten = new Map();
   for (const g of new Set(kandidaten.map((k) => k.g))) {
-    const erw = lauf.erwerbe.filter((e) => e.von === g && e.datum === d.schenkung && !e.erbfall);
+    const daten = new Set(kandidaten.filter((k) => k.g === g).map(datumVon));
+    const erw = lauf.erwerbe.filter((e) => e.von === g && daten.has(e.datum) && !e.erbfall);
     let faktor = 1;
-    for (const e of erw) {
-      const verfuegbar = Math.max(0, e.freibetrag - (e.summeVorerwerbe || 0));
-      if (e.bereicherung > 0) faktor = Math.min(faktor, verfuegbar / e.bereicherung);
+    for (const an of new Set(erw.map((e) => e.an))) {
+      const eigene = erw.filter((e) => e.an === an);
+      const bereich = summe(eigene, (e) => e.bereicherung);
+      const erstesDatum = eigene.map((e) => e.datum).sort()[0];
+      const vorher = summe(lauf.erwerbe.filter((e) => e.von === g && e.an === an && !e.erbfall && !e.steuerfrei && e.datum < erstesDatum && innerhalbJahre(e.datum, erstesDatum, R.zusammenrechnungJahre)), (e) => e.bereicherung);
+      const verfuegbar = Math.max(0, eigene[0].freibetrag - vorher);
+      if (bereich > 0) faktor = Math.min(faktor, verfuegbar / bereich);
     }
     quoten.set(g, Math.max(0, Math.min(1, faktor)));
   }
@@ -195,12 +217,18 @@ function bausteinTranchen(fall, kandidaten, d) {
     const p = pm.get(k.g);
     const restJahre = lebenserwartung(p.geschlecht, alter(p.geburt, fall.stichtag) ?? 75);
     const q1 = Math.round(k.q * f * 1000) / 1000;
-    if (q1 > 0.001) schritte.push(schenkungsSchritt(fall, { ...k, quote: q1, datum: d.schenkung, titel: `Überlassung ${k.a.bezeichnung || ''} (1. Teil)`.trim() }));
-    if (k.q - q1 > 0.001 && restJahre > 10.5) {
+    const bez = k.a.bezeichnung || 'Vermögen';
+    if (q1 > 0.001) schritte.push(schenkungsSchritt(fall, { ...k, quote: q1, datum: datumVon(k), titel: `Überlassung ${k.a.bezeichnung || ''} (1. Teil)`.trim() }));
+    const rest = k.q - q1 > 0.001;
+    if (rest && restJahre > 10.5) {
       schritte.push(schenkungsSchritt(fall, { ...k, quote: Math.round((k.q - q1) * 1000) / 1000, datum: d.tranche2, titel: `Überlassung ${k.a.bezeichnung || ''} (2. Teil)`.trim() }));
-      texte.push(`${name(fall, k.g)} überträgt vom „${k.a.bezeichnung || 'Vermögen'}“ heute ${fmtQuote(q1)} steuerfrei im Rahmen der Freibeträge und den Rest nach Ablauf von zehn Jahren.`);
-    } else {
-      texte.push(`${name(fall, k.g)} überträgt vom „${k.a.bezeichnung || 'Vermögen'}“ ${fmtQuote(q1)} im Rahmen der Freibeträge; der Rest geht im Erbfall über.`);
+      texte.push(q1 > 0.001
+        ? `${name(fall, k.g)} überträgt vom „${bez}“ heute ${fmtQuote(q1)} steuerfrei im Rahmen der Freibeträge und den Rest nach Ablauf von zehn Jahren.`
+        : `${name(fall, k.g)} überträgt das „${bez}“ erst nach Ablauf von zehn Jahren; die Freibeträge sind bis dahin ausgeschöpft.`);
+    } else if (q1 > 0.001) {
+      texte.push(rest
+        ? `${name(fall, k.g)} überträgt vom „${bez}“ ${fmtQuote(q1)} im Rahmen der Freibeträge; der Rest geht im Erbfall über.`
+        : `${name(fall, k.g)} überträgt ${k.q < 1 ? `${pron(fall, k.g).seinen} Anteil (${fmtQuote(k.q)}) am` : 'das'} „${bez}“ im Rahmen der Freibeträge.`);
     }
   }
   texte.push('Jeweils unter Vorbehalt des Nießbrauchs und mit Rückforderungsrecht.');
@@ -223,6 +251,129 @@ function bausteinFamilienheim(fall) {
       id: neueId('st'), typ: 'schenkung', datum: d.familienheim, titel: 'Familienheim an Ehegatten', von: reich,
       gegenstaende: [{ assetId: h.id, quote: Number(h.eigentum[reich]) }], empfaenger: { [arm]: 1 }, nutzung: { typ: 'keine' }, gegenleistungen: [], rueckforderungsrecht: true
     }))
+  };
+}
+
+/**
+ * Vermögensausgleich unter Ehegatten: Der Ehegatte mit dem größeren übertragbaren Vermögen wendet dem anderen
+ * Anteile daran zu (ehebedingte Zuwendung) und behält sich den Nießbrauch vor. Der andere überträgt als Gegenleistung
+ * eigene Gegenstände (vorrangig seinen Anteil am Familienheim). Steuerpflichtig ist nur die Differenz nach Abzug von
+ * Nießbrauch und Gegenleistung; danach können beide Ehegatten ihre Freibeträge gegenüber den Kindern nutzen.
+ * Liefert mehrere Varianten (Umfang der Gegenleistung, Quote); die Auswahl trifft die Berechnung.
+ */
+function ausgleichVarianten(fall, d) {
+  const [a, b] = geberListe(fall);
+  if (!b || ehegatte(fall, a) !== b) return [];
+  const netto = (v, id) => (vw(v) - (Number(v.verbindlichkeit) || 0)) * Number(v.eigentum?.[id] || 0);
+  const tWert = (id) => summe(fall.vermoegen.filter((v) => istSchenkungsgut(fall, v)), (v) => netto(v, id));
+  const reich = tWert(a) >= tWert(b) ? a : b;
+  const arm = reich === a ? b : a;
+  if (tWert(reich) < 200000) return [];
+  const xArm = tWert(arm);
+  const quellenAlle = fall.vermoegen.filter((v) => istSchenkungsgut(fall, v) && Number(v.eigentum?.[reich] || 0) > 0);
+  const eigeneArm = fall.vermoegen.filter((v) => v.art !== 'verbindlichkeit' && Number(v.eigentum?.[arm] || 0) > 0 && uebertragbar(fall, v));
+  const heim = eigeneArm.filter((v) => v.art === 'immobilie' && v.nutzung === 'familienheim');
+  const nichtT = eigeneArm.filter((v) => !istSchenkungsgut(fall, v));
+  const gruppen = [[], heim, nichtT, eigeneArm];
+  const gesehen = new Set();
+  const pRe = personMap(fall).get(reich);
+  const varianten = [];
+  for (const gg of gruppen) {
+    const key = gg.map((v) => v.id).sort().join(',');
+    if (gesehen.has(key)) continue;
+    gesehen.add(key);
+    // Was der andere Ehegatte als Gegenleistung hingibt, wird nicht zugleich zugewendet
+    const quellen = quellenAlle.filter((v) => !gg.includes(v));
+    if (!quellen.length) continue;
+    const X = summe(quellen, (v) => netto(v, reich));
+    const cT = summe(gg.filter((v) => istSchenkungsgut(fall, v)), (v) => netto(v, arm));
+    const gegenwertOhneHeim = summe(gg.filter((v) => v.nutzung !== 'familienheim'), (v) => sw(v) * Number(v.eigentum[arm]));
+    // Quote, bei der beide Ehegatten danach gleich viel übertragbares Vermögen halten
+    const restReich = tWert(reich) - X;
+    const qGleich = Math.round(Math.min(1, Math.max(0.05, (2 * cT + X + restReich - xArm) / (2 * X))) * 100) / 100;
+    // Quote, bei der die steuerpflichtige Zuwendung den Ehegattenfreibetrag gerade ausschöpft
+    // (linear in q: Steuerwert und Nießbrauch wachsen mit der Quote; § 13d ErbStG kürzt Wert, Last und Gegenleistung)
+    const f13d = (v) => (v.art === 'immobilie' && v.nutzung === 'vermietet_wohnen' ? 1 - R.befreiungWohnvermietung : 1);
+    let A = 0, swS = 0, swF = 0;
+    for (const v of quellen) {
+      const anteil = Number(v.eigentum[reich]);
+      const ertrag = v.jahresertrag != null && v.jahresertrag !== '' ? Number(v.jahresertrag) * anteil : null;
+      const kw = kapitalwertLebenslang(jahreswertNutzung(sw(v) * anteil, ertrag).jahreswert, [pRe], d.ausgleich).kapitalwert;
+      A += f13d(v) * (sw(v) * anteil - kw);
+      swS += sw(v) * anteil;
+      swF += f13d(v) * sw(v) * anteil;
+    }
+    const G = summe(gg, (v) => sw(v) * Number(v.eigentum[arm]));
+    const qFrei = A > 0 ? Math.floor(Math.min(1, (R.freibetrag.ehegatte + G * (swS ? swF / swS : 1)) / A) * 100) / 100 : 0;
+    for (const q of [...new Set([qGleich, qFrei, 1 / 2, 1 / 3, 1 / 4].filter((x) => x > 0))]) {
+      // Wert der Zuwendung nach Nießbrauch; die Gegenleistung darf ihn nicht übersteigen
+      // (außer beim Familienheim, dessen Mehrwert ohnehin nach § 13 Abs. 1 Nr. 4a ErbStG frei wäre)
+      let wertNetto = 0;
+      for (const v of quellen) {
+        const anteil = Number(v.eigentum[reich]) * q;
+        const ertrag = v.jahresertrag != null && v.jahresertrag !== '' ? Number(v.jahresertrag) * anteil : null;
+        const jw = jahreswertNutzung(sw(v) * anteil, ertrag).jahreswert;
+        const kw = kapitalwertLebenslang(jw, [pRe], d.ausgleich).kapitalwert;
+        wertNetto += sw(v) * anteil - kw;
+      }
+      if (wertNetto <= 0 || gegenwertOhneHeim > wertNetto) continue;
+      if (q * X < 100000) continue;
+      varianten.push(ausgleichBaustein(fall, { reich, arm, q, quellen, gg }));
+    }
+  }
+  return varianten;
+}
+
+function ausgleichBaustein(fall, { reich, arm, q, quellen, gg }) {
+  const pr = pron(fall, reich);
+  const pa = pron(fall, arm);
+  const fallNach = tiefeKopie(fall);
+  for (const v of fallNach.vermoegen) {
+    const ist = (id) => Number(v.eigentum?.[id] || 0);
+    if (quellen.some((x) => x.id === v.id)) {
+      const anteil = ist(reich) * q;
+      v.eigentum = { ...v.eigentum, [reich]: ist(reich) - anteil, [arm]: ist(arm) + anteil };
+      v._ausgleich = { [arm]: { quote: anteil, von: reich } };
+    } else if (gg.some((x) => x.id === v.id)) {
+      v.eigentum = { ...v.eigentum, [reich]: ist(reich) + ist(arm), [arm]: 0 };
+    }
+  }
+  const gegen = gg.map((v) => `${Number(v.eigentum[arm]) < 0.999 ? `${pa.seinen} Anteil an` : 'das'} „${v.bezeichnung || 'Vermögen'}“`);
+  const gegenText = gegen.length > 1 ? `${gegen.slice(0, -1).join(', ')} und ${gegen[gegen.length - 1]}` : gegen[0];
+  const alleinig = quellen.every((v) => Number(v.eigentum[reich]) > 0.999);
+  const objekte = quellen.map((v) => `„${v.bezeichnung || 'Vermögen'}“`);
+  const objektListe = objekte.length > 1 ? `${objekte.slice(0, -1).join(', ')} und ${objekte[objekte.length - 1]}` : objekte[0];
+  const was = alleinig
+    ? `${quellen.length > 1 ? 'je ' : ''}${fmtQuote(q)} an ${objektListe}`
+    : `${quellen.length > 1 ? 'je ' : ''}${fmtQuote(q)} ${pr.seinen === 'ihren' ? 'ihres' : 'seines'} Anteils an ${objektListe}`;
+  // Der steuerliche Satz wird nach der Berechnung aus dem tatsächlichen Erwerb gebildet (textNach)
+  const steuerText = (erw) => {
+    if (!erw) return null;
+    const fb = erw.freibetrag;
+    const b = erw.bereicherung;
+    const abzug = gg.length ? 'Nießbrauch und Gegenleistung' : 'Nießbrauch';
+    return `Steuerlich zählt nur die Zuwendung abzüglich ${abzug}: ${fmtEuro(b)}. ${b > fb ? `Das übersteigt den Ehegattenfreibetrag von ${fmtEuro(fb)}; Schenkungsteuer rund ${fmtEuro(erw.steuer)}.` : `Das liegt innerhalb des Ehegattenfreibetrags von ${fmtEuro(fb)}.`}`;
+  };
+  const texte = (erw) => [
+    `${name(fall, reich)} überträgt ${name(fall, arm)} ${was} als ehebedingte Zuwendung und behält sich daran den Nießbrauch vor.`,
+    ...(gg.length ? [`Als Gegenleistung überträgt ${name(fall, arm)} ${name(fall, reich)} ${gegenText}.`] : []),
+    ...(steuerText(erw) ? [steuerText(erw)] : []),
+    `Danach können beide Ehegatten ihre Freibeträge gegenüber den Kindern nutzen. ${name(fall, arm)} entscheidet über eine Weitergabe selbst, ohne Verpflichtung und mit deutlichem zeitlichem Abstand; sonst droht die Umqualifizierung in eine direkte Zuwendung (Kettenschenkung).${gg.some((v) => v.nutzung !== 'familienheim') ? ' Gegenleistungen machen die Übertragung einkommensteuerlich teilentgeltlich (§ 23 EStG prüfen).' : ''}`
+  ];
+  return {
+    key: 'V',
+    titel: 'Vermögensausgleich unter Ehegatten',
+    texte: texte(null),
+    textNach: texte,
+    fallNach,
+    schritte: (d) => [{
+      id: neueId('st'), typ: 'schenkung', datum: d.ausgleich, titel: 'Vermögensausgleich unter Ehegatten', von: reich,
+      gegenstaende: quellen.map((v) => ({ assetId: v.id, quote: Number(v.eigentum[reich]) * q })),
+      empfaenger: { [arm]: 1 },
+      nutzung: { typ: 'niessbrauch', berechtigte: [reich], modus: 'einzel', quote: 1 },
+      gegenleistungen: gg.map((v) => ({ id: neueId('gl'), typ: 'sache', assetId: v.id, quote: Number(v.eigentum[arm]), vonId: arm })),
+      rueckforderungsrecht: true
+    }]
   };
 }
 
@@ -299,8 +450,20 @@ const KOMBINATIONEN = [
   ['T', 'S'], ['T', 'S2'], ['T', 'F'], ['T', 'G'], ['T', 'E'], ['T', 'A'],
   ['T', 'S', 'F'], ['T', 'S2', 'F'], ['T', 'S', 'G'], ['T', 'S2', 'G'], ['T', 'G', 'F'], ['T', 'S', 'E'], ['T', 'S2', 'E'],
   ['T', 'S', 'F', 'G'], ['T', 'S2', 'F', 'G'], ['T', 'S', 'A'], ['T', 'S2', 'A'],
-  ['S', 'P'], ['S2', 'P'], ['F', 'P'], ['G', 'F', 'S2']
+  ['S', 'P'], ['S2', 'P'], ['F', 'P'], ['G', 'F', 'S2'],
+  // Vermögensausgleich unter Ehegatten mit anschließenden Schenkungen beider Ehegatten
+  ['V', 'S'], ['V', 'S2'], ['T', 'V'], ['T', 'V', 'S'], ['T', 'V', 'S2'], ['V', 'S', 'P'], ['V', 'S2', 'P'], ['T', 'V', 'S', 'E'], ['T', 'V', 'S2', 'E']
 ];
+
+/** Bausteine, deren Inhalt vom Eigentum abhängt (nach einem Vermögensausgleich neu zu bilden). */
+function eigentumsBausteine(fall, d, vorSchritte = [], basisFall = fall) {
+  const kandidaten = schenkungsKandidaten(fall);
+  const res = {};
+  for (const b of [bausteinSchenkung(fall, kandidaten), bausteinTranchen(basisFall, kandidaten, d, vorSchritte), bausteinEnkel(fall)]) {
+    if (b) res[b.key] = b;
+  }
+  return res;
+}
 
 export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
   const k = kontextFuer(fall);
@@ -308,36 +471,48 @@ export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
   const basis = bewerteSzenario(fall, basisSz, k, { ohneKettenpruefung: true });
 
   const d = {
+    ausgleich: addJahre(fall.stichtag, 1 / 12),
     schaukel: addJahre(fall.stichtag, 1 / 12),
     familienheim: addJahre(fall.stichtag, 2 / 12),
     schenkung: addJahre(fall.stichtag, 3 / 12),
     enkel: addJahre(fall.stichtag, 3 / 12),
     testament: addJahre(fall.stichtag, 4 / 12),
+    // Weitergabe von Vermögen aus dem Ausgleich erst mit Abstand von mehr als einem Jahr
+    weitergabe: addJahre(fall.stichtag, 15 / 12),
     tranche2: addJahre(fall.stichtag, 10 + 4 / 12)
   };
-  const kandidaten = schenkungsKandidaten(fall);
-  const bausteine = {};
-  for (const b of [bausteinTestament(fall), bausteinSchenkung(fall, kandidaten), bausteinTranchen(fall, kandidaten, d), bausteinFamilienheim(fall), bausteinSchaukel(fall), bausteinPflichtteil(fall), bausteinAusschlagung(fall), bausteinEnkel(fall)]) {
+  const bausteine = { ...eigentumsBausteine(fall, d) };
+  for (const b of [bausteinTestament(fall), bausteinFamilienheim(fall), bausteinSchaukel(fall), bausteinPflichtteil(fall), bausteinAusschlagung(fall)]) {
     if (b) bausteine[b.key] = b;
   }
+  const varianten = ausgleichVarianten(fall, d);
   // Pflichtteil nur ohne neues Testament sinnvoll, wenn bereits ein Ehegattentestament besteht
   const berliner = ['a', 'b'].every((sl) => !fall.geber[sl] || fall.verfuegungen?.[sl]?.typ === 'alleinerbe_ehegatte');
 
   const gesehen = new Set();
   const ergebnisse = [];
-  for (const kombi of KOMBINATIONEN) {
-    if (!kombi.every((key) => bausteine[key])) continue;
-    if (kombi.includes('P') && (!berliner || kombi.includes('T'))) continue;
-    const teile = kombi.map((key) => bausteine[key]);
+  const rechne = (kombi, verfuegbar) => {
+    if (!kombi.every((key) => verfuegbar[key])) return;
+    if (kombi.includes('P') && (!berliner || kombi.includes('T'))) return;
+    const teile = kombi.map((key) => verfuegbar[key]);
     const schritte = teile.flatMap((b) => b.schritte(d));
     const erbfallOptionen = Object.assign({}, ...teile.map((b) => b.erbfallOptionen || {}));
-    const sig = JSON.stringify([schritte.map((s) => [s.typ, s.von, s.datum, s.gegenstaende, s.empfaenger, s.form]), erbfallOptionen]);
-    if (gesehen.has(sig)) continue;
+    const sig = JSON.stringify([schritte.map((s) => [s.typ, s.von, s.datum, s.gegenstaende, s.empfaenger, s.form, s.gegenleistungen?.map((g) => [g.assetId, g.quote])]), erbfallOptionen]);
+    if (gesehen.has(sig)) return;
     gesehen.add(sig);
     const sz = { id: `vorschlag_${kombi.join('')}`, name: teile.map((b) => b.titel).join(' + '), schritte, erbfallOptionen };
     let r;
-    try { r = bewerteSzenario(fall, sz, k, { ohneKettenpruefung: true }); } catch (e) { continue; }
+    try { r = bewerteSzenario(fall, sz, k, { ohneKettenpruefung: true }); } catch (e) { return; }
     ergebnisse.push({ kombi, teile, sz, r });
+  };
+  for (const kombi of KOMBINATIONEN) {
+    if (!kombi.includes('V')) { rechne(kombi, bausteine); continue; }
+    for (const v of varianten) {
+      const vSchritte = v.schritte(d);
+      const nach = eigentumsBausteine(v.fallNach, d, vSchritte, fall);
+      // der Ausgleichsschritt wird je Variante einmal erzeugt, damit Schritt-IDs stabil bleiben
+      rechne(kombi, { ...bausteine, ...nach, V: { ...v, schritte: () => vSchritte } });
+    }
   }
 
   const zielBasis = zielStatus(basis.ziel);
@@ -360,9 +535,20 @@ export function vorschlaege(fall, { maxAnzahl = 4 } = {}) {
     if (auswahl.some((x) => Math.abs(x.r.erwartet - e.r.erwartet) < 1000 && x.kombi.length <= e.kombi.length)) continue;
     auswahl.push(e);
   }
+  // Erweiterungen ohne nennenswerten Vorteil gegenüber einem kleineren Vorschlag entfernen
+  for (const e of [...auswahl]) {
+    if (auswahl.some((x) => x !== e && x.kombi.length < e.kombi.length && x.kombi.every((key) => e.kombi.includes(key)) && x.r.erwartet - e.r.erwartet < 1000 && (zielStatus(x.r.ziel) !== false || zielStatus(e.r.ziel) === false))) {
+      auswahl.splice(auswahl.indexOf(e), 1);
+    }
+  }
   // Vollständige Bewertung (inkl. Kettenprüfung) für die Auswahl
   const liste = auswahl.map((e) => {
     const voll = bewerteSzenario(fall, e.sz, k);
+    for (const b of e.teile) {
+      if (!b.textNach) continue;
+      const id = e.sz.schritte.find((s) => s.titel === b.titel)?.id;
+      b.texte = b.textNach(voll.laeufe[0]?.erwerbe.find((x) => x.schrittId === id) || null);
+    }
     return {
       id: e.sz.id,
       titel: e.sz.name,
