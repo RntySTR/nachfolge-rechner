@@ -8,6 +8,8 @@ Interner Rechner zur Planung der Vermögensnachfolge. Er vergleicht Gestaltungen
 
 Zusätzlich schlägt der Rechner Gestaltungen vor (`js/engine/strategien.js`): Er kombiniert übliche Bausteine (Erbvertrag mit Freibetragsvermächtnissen, Vermögensausgleich unter Ehegatten mit Gegenleistung, Schenkung unter Nießbrauchsvorbehalt, Schenkung in Tranchen, Familienheim an den Ehegatten, Güterstandsschaukel, Pflichtteil nach dem ersten Erbfall, Ausschlagung, Schenkungen an Enkel), rechnet jede Kombination durch und zeigt die günstigsten, die das erfasste Ziel erreichen. Jeder Vorschlag lässt sich als Szenario übernehmen und weiter bearbeiten. Bleiben weniger als drei Vorschläge übrig, füllt der Rechner auf drei Spalten auf und zeigt die günstigsten verworfenen Kombinationen mit dem Grund (Mehrbelastung, Ersparnis unter 500 € oder Ziel nicht mehr erreicht), damit nachvollziehbar ist, woran eine Gestaltung scheitert.
 
+Die Schritte 4 und 5 sind getrennt: „Szenarien“ dient dem Auswählen und Bearbeiten (Vorschläge, Bausteine, Schrittliste, je Szenario eine Kennzahlzeile). Ablauf, Freibeträge, Steuer und Kosten je Ereignis stehen nur in der „Zusammenfassung“ (Tab „Ablauf und Steuern“); „Steuerdetails ansehen“ und „Szenario bearbeiten“ verbinden beide Schritte.
+
 Beim ersten Öffnen startet der Rechner mit einem leeren Fall und einem kurzen Tutorial (fünf Seiten: Zweck, Ablauf, Eingaben, Vorschläge, Ergebnis und Grenzen). Es erscheint nur einmal pro Browser und lässt sich über „Anleitung“ in der Seitenleiste wieder öffnen; am Ende kann man den Beispielfall laden.
 
 Die Anwendung ist eine statische Webseite ohne Server. Alle Eingaben bleiben im Browser des jeweiligen Geräts (lokaler Speicher) und lassen sich als Datei sichern. Personen werden nur mit Vornamen erfasst.

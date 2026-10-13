@@ -82,16 +82,13 @@ export function ansichtSzenarien(f) {
   const aktuell = eigene.find((s) => s.id === state.szenarioId) || eigene[0];
   state.szenarioId = aktuell?.id;
   const ergebnisVon = (sz) => res.szenarien?.find((r) => r.sz.id === sz?.id);
-  const kopf = seitenkopf({ schritt: 'Schritt 4 von 5', titel: 'Szenarien', lead: 'Vorschläge des Rechners und eigene Szenarien, gemessen an der Ausgangslage ohne Gestaltung.', aktionen: aktionsknopf('szenario-neu', 'Eigenes Szenario', { ico: 'plus' }) });
+  const kopf = seitenkopf({ schritt: 'Schritt 4 von 5', titel: 'Szenarien', lead: 'Vorschläge des Rechners und eigene Szenarien, gemessen an der Ausgangslage ohne Gestaltung. Steuer und Kosten je Ereignis stehen in der Zusammenfassung.', aktionen: aktionsknopf('szenario-neu', 'Eigenes Szenario', { ico: 'plus' }) });
   if (res.fehlt) return `${kopf}${fehltBox(res.fehlt)}`;
 
-  // Ausgangslage in einer Zeile; Belastung und Ablauf aufklappbar
+  // Ausgangslage in einer Zeile; Ablauf, Steuern und Kosten stehen in der Zusammenfassung
   const basisR = ergebnisVon(basisSz);
   const zsB = basisR && !basisR.fehler ? zielStatus(basisR.ziel) : null;
-  const basisTeil = basisR?.fehler ? fehlerBox(basisR) : aufklapp('basis-ablauf',
-    `<span class="basis-zeile"><span class="bz-t">Ohne Gestaltung ${infoTip('Gesetzliche Erbfolge bzw. die bestehenden Verfügungen, ohne Schritte zu Lebzeiten. Maßstab für alle Vorschläge.')}</span><span class="bz-w num">${basisR ? euro(basisR.erwartet) : '–'}</span><span class="bz-z ${zielKlasse(zsB)}">Gestaltungsziel ${zielText(zsB)}</span><span class="bz-a">Ablauf</span></span>`,
-    `<div style="margin-top:16px">${basisR ? belastungBlock(f, basisR, { ohneKopf: true }) : ''}${ablaufTeil(f, basisSz, f.szenarien.indexOf(basisSz), basisR)}</div>`,
-    { cls: 'basis-block' });
+  const basisTeil = basisR?.fehler ? fehlerBox(basisR) : `<div class="basis-block basis-fest"><span class="basis-zeile"><span class="bz-t">Ohne Gestaltung ${infoTip('Gesetzliche Erbfolge bzw. die bestehenden Verfügungen, ohne Schritte zu Lebzeiten. Maßstab für alle Vorschläge.')}</span><span class="bz-w num">${basisR ? euro(basisR.erwartet) : '–'}</span><span class="bz-z ${zielKlasse(zsB)}">Gestaltungsziel ${zielText(zsB)}</span>${basisR ? `<button type="button" class="btn ghost klein bz-a" data-act="details-ansehen" data-id="${basisSz.id}">Steuerdetails</button>` : ''}</span></div>`;
 
   const liste = eigene.map((s) => {
     const r = ergebnisVon(s);
@@ -109,10 +106,10 @@ export function ansichtSzenarien(f) {
     const opt = aktuell.erbfallOptionen || {};
     editor = `<div class="raster" style="gap:24px">
         <div class="raster zwei" style="align-items:end">${textfeld('Name des Szenarios', `szenarien.${idx}.name`, aktuell.name)}<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${aktionsknopf('szenario-duplizieren', 'Duplizieren', { ico: 'copy', cls: 'klein' })}${aktionsknopf('szenario-loeschen', 'Löschen', { ico: 'trash-2', cls: 'klein gefahr' })}</div></div>
-        ${ergebnis && !ergebnis.fehler ? belastungBlock(f, ergebnis, { vergleich: basisR }) : fehlerBox(ergebnis)}
+        ${ergebnis && !ergebnis.fehler ? belastungBlock(aktuell, ergebnis, basisR) : fehlerBox(ergebnis)}
         ${aktuell.module?.length ? `<section><h2 style="margin-bottom:10px">Bausteine</h2><div class="bs-liste">${aktuell.module.map((m) => bausteinKarte(`sz:${aktuell.id}:${m.key}`, m)).join('')}</div></section>` : ''}
         ${aktuell.module?.length
-          ? aufklapp(`sz-ablauf:${aktuell.id}`, `<h2>Ablauf, Vermögen und Steuern</h2><span class="small muted">${anzahl(aktuell.schritte.length, 'Schritt', 'Schritte', 'm')} und beide Erbfälle</span>`, ablaufTeil(f, aktuell, idx, ergebnis, { ohneTitel: true }), { cls: 'sz-ablauf' })
+          ? aufklapp(`sz-ablauf:${aktuell.id}`, `<h2>Schritte bearbeiten</h2><span class="small muted">${anzahl(aktuell.schritte.length, 'Schritt', 'Schritte', 'm')}</span>`, ablaufTeil(f, aktuell, idx, ergebnis, { ohneTitel: true }), { cls: 'sz-ablauf' })
           : ablaufTeil(f, aktuell, idx, ergebnis)}
         <section>
           <h2 class="mit-info" style="margin-bottom:14px">Nach dem ersten Erbfall ${infoTip('Gestaltungen, die erst nach dem Tod des Erstversterbenden ausgeübt werden.')}</h2>
@@ -140,12 +137,12 @@ function fehlerBox(r) {
   return r?.fehler ? `<div class="hinweis risiko">${icon('triangle-alert', 20)}<div><div class="tt">Berechnung nicht möglich</div><div class="tx">${esc(r.fehler)}</div></div></div>` : '';
 }
 
+/** Schritt 4: Schrittliste zum Bearbeiten, ohne Steuer- und Erwerbsdetails (die stehen in Schritt 5). */
 function ablaufTeil(f, sz, idx, ergebnis, { ohneTitel = false } = {}) {
   return `<section style="margin-top:${ohneTitel ? 0 : 24}px">
-    <div class="detail-kopf" style="margin-bottom:14px">${ohneTitel ? '<span></span>' : '<h3>Ablauf, Vermögen und Steuern</h3>'}${reihenfolgeWahl(f, ergebnis)}</div>
-    ${ablauf(f, sz, idx, ergebnis)}
+    ${ohneTitel ? '' : '<div class="detail-kopf" style="margin-bottom:14px"><h3>Schritte bearbeiten</h3></div>'}
+    ${ablauf(f, sz, idx, ergebnis, { bearbeiten: true })}
     ${sz.basis ? '' : `<div class="schritt-neu" style="margin-top:16px">${SCHRITTARTEN.map(([typ, t, ico]) => aktionsknopf('schritt-neu', t, { ico, cls: 'klein', daten: { typ } })).join('')}</div>`}
-    ${ergebnis?.laeufe ? `<p class="small muted mit-info" style="margin-top:12px">Ereignis antippen für Freibeträge und Steuer je Person. ${infoTip(`Erbfälle nach ${annahmeText(f)}. „Erhält“ ist der Verkehrswert, der der Person durch das Ereignis netto zufließt, vor Steuern und Kosten.`)}</p>` : ''}
   </section>`;
 }
 
@@ -166,18 +163,16 @@ function postenWerte(x) {
   return POSTEN.map(([k, t, fam]) => ({ k, t, fam, w: k.startsWith('steuer') ? (x[k] || 0) : (x.kostenNach?.[k] || 0) }));
 }
 
-function belastungBlock(f, r, { vergleich = null, ohneKopf = false } = {}) {
-  const werte = postenWerte(r).filter((p) => p.w >= 0.5);
-  const max = Math.max(1, ...werte.map((p) => p.w));
+/** Kennzahlen eines Szenarios für Schritt 4; die Aufschlüsselung nach Posten steht in der Zusammenfassung. */
+function belastungBlock(sz, r, vergleich = null) {
   const zs = zielStatus(r.ziel);
   const diff = vergleich && !vergleich.fehler ? vergleich.erwartet - r.erwartet : null;
-  return `<div class="belastung${ohneKopf ? ' ohne-kopf' : ''}">
-    ${ohneKopf ? '' : `<div class="bl-kopf">
+  return `<div class="belastung">
+    <div class="bl-kopf">
       <div><span class="lbl">Steuern und Kosten, gewichtet</span><span class="fig num">${euro(r.erwartet)}</span>${diff != null ? `<span class="small ${diff > 0 ? 'ziel-ok' : 'ziel-nein'}">${diff > 0 ? '− ' : '+ '}${euro(Math.abs(diff))} gegenüber ohne Gestaltung</span>` : ''}</div>
       <div style="text-align:right"><span class="lbl">Gestaltungsziel</span><span class="${zielKlasse(zs)}" style="display:block;font:500 18px/1.2 var(--font-display);margin-top:6px">${zielText(zs)}</span></div>
-    </div>`}
-    ${werte.length ? `<div class="bl-zeilen">${werte.map((p) => `<div class="bl-zeile"><span>${esc(p.t)}</span><span class="bl-balken"><span class="${p.fam}" style="width:${Math.max(1.5, (p.w / max) * 100)}%"></span></span><b class="num">${euro(p.w)}</b></div>`).join('')}</div>` : '<p class="muted" style="margin-top:12px">Weder Steuern noch Kosten.</p>'}
-    <p class="small muted mit-info" style="margin-top:12px">${r.laeufe.map((l) => `${esc(laufLabel(f, l))}: ${euro(l.summen.belastung)}`).join(' · ')}${r.laeufe.length > 1 ? ` ${infoTip('Gewichtet nach der statistischen Wahrscheinlichkeit der Sterbereihenfolge; Tod jeweils bei der angenommenen Lebenserwartung, ohne Abzinsung.')}` : ''}</p>
+    </div>
+    <div class="bl-fuss">${aktionsknopf('details-ansehen', 'Steuerdetails ansehen', { ico: 'git-compare-arrows', cls: 'klein', daten: { id: sz.id } })}</div>
   </div>`;
 }
 
@@ -286,12 +281,6 @@ function vorschlagsBereich(f, res) {
 
 // ------------------------------------------------------------------ Ablauf mit Steuern je Ereignis
 
-function reihenfolgeWahl(f, r) {
-  if (!r?.laeufe || r.laeufe.length < 2) return '';
-  const aktiv = gewaehlterLauf(r);
-  return `<div class="mit-info"><div class="seg" role="group">${r.laeufe.map((l, i) => `<button type="button" data-act="reihenfolge" data-id="${l.erstversterbender}" aria-pressed="${l === aktiv}">${esc(laufLabel(f, l))} · ${prozent(r.gewichte[i])}</button>`).join('')}</div>${infoTip('Statistische Wahrscheinlichkeit der Sterbereihenfolge (Sterbetafel).')}</div>`;
-}
-
 /** Gewählte Sterbereihenfolge; ohne Wahl (oder „gewichtet“) die wahrscheinlichere. */
 function gewaehlterLauf(r) {
   const w = state.detail.reihenfolge;
@@ -301,7 +290,8 @@ function gewaehlterLauf(r) {
   return r.gewichte[1] > r.gewichte[0] ? r.laeufe[1] : r.laeufe[0];
 }
 
-function ablauf(f, sz, idx, r) {
+/** `bearbeiten`: schlanke Schrittliste mit Stift (Schritt 4); sonst Ereignisse mit Steuer und Kosten (Schritt 5). */
+function ablauf(f, sz, idx, r, { bearbeiten = false } = {}) {
   const lauf = r?.laeufe ? gewaehlterLauf(r) : null;
   const schrittIndex = new Map(sz.schritte.map((s, j) => [s.id, j]));
   const ereignisse = lauf ? [...lauf.zeitachse] : [];
@@ -311,10 +301,21 @@ function ablauf(f, sz, idx, r) {
   }
   ereignisse.sort((x, y) => String(x.datum).localeCompare(String(y.datum)));
   if (!ereignisse.length) return '<p class="muted">Noch keine Schritte.</p>';
-  return `<div class="zeitstrahl">${ereignisse.map((e) => ereignisKarte(f, sz, idx, lauf, e, schrittIndex)).join('')}</div>`;
+  return `<div class="zeitstrahl">${ereignisse.map((e) => ereignisKarte(f, sz, idx, lauf, e, schrittIndex, bearbeiten)).join('')}</div>`;
 }
 
-function ereignisKarte(f, sz, idx, lauf, e, schrittIndex) {
+function ereignisKarte(f, sz, idx, lauf, e, schrittIndex, bearbeiten = false) {
+  const j = schrittIndex.get(e.schrittId);
+  const art = SCHRITTARTEN.find(([t]) => t === e.typ);
+  if (bearbeiten) {
+    const stift = j != null && !sz.basis ? `<button type="button" class="iconbtn" data-act="schritt-bearbeiten" data-sz="${idx}" data-index="${j}" title="Schritt bearbeiten" aria-label="Schritt bearbeiten">${icon('pencil', 18)}</button>` : '';
+    return `<div class="ereignis ablauf kompakt${e.typ === 'erbfall' ? ' erbfall' : ''}">
+      <div class="ab-kopf">
+        <div><div class="datum">${e.datum ? datum(e.datum) : 'ohne Datum'}${e.typ === 'erbfall' ? ' · angenommen' : ''}</div><div class="tt">${esc(e.titel || '')}</div><div class="tx">${esc(e.text || '')}</div></div>
+        <div class="ab-ergebnis">${e.uebersprungen ? '<span class="marke warn">nicht ausgeführt</span>' : ''}<span class="ab-knoepfe">${stift}${!stift && art ? icon(art[2], 18) : ''}</span></div>
+      </div>
+    </div>`;
+  }
   const erw = lauf && e.ereignis ? lauf.erwerbe.filter((x) => x.ereignis === e.ereignis) : [];
   const kos = lauf && e.ereignis ? lauf.kosten.filter((x) => x.ereignis === e.ereignis) : [];
   const fluss = lauf && e.ereignis ? (lauf.fluesse?.[e.ereignis] || {}) : {};
@@ -322,8 +323,6 @@ function ereignisKarte(f, sz, idx, lauf, e, schrittIndex) {
   const kostenZeile = kostenText(kos);
   const key = `${sz.id}:${e.ereignis || e.schrittId}`;
   const offen = !!state.offenSz?.[key];
-  const j = schrittIndex.get(e.schrittId);
-  const art = SCHRITTARTEN.find(([t]) => t === e.typ);
   const zahler = [...new Set(erw.filter((x) => x.steuer > 0).map((x) => x.an))];
   const empfaenger = Object.entries(fluss).filter(([, d]) => d > 0).sort((x, y) => y[1] - x[1]);
   return `<div class="ereignis ablauf${e.typ === 'erbfall' ? ' erbfall' : ''}${offen ? ' offen' : ''}" data-act="ereignis-umschalten" data-id="${esc(key)}" role="button" tabindex="0" aria-expanded="${offen}">
@@ -333,7 +332,7 @@ function ereignisKarte(f, sz, idx, lauf, e, schrittIndex) {
       </div>
       <div class="ab-ergebnis">
         ${e.uebersprungen ? '<span class="marke warn">nicht ausgeführt</span>' : `<span class="ab-steuer num">${steuer ? `Steuer ${euro(steuer)}` : 'keine Steuer'}</span><span class="ab-unter">${zahler.length ? `zahlt ${esc(zahler.map((id) => nameVon(f, id)).join(', '))}` : erw.length ? 'innerhalb der Freibeträge' : ''}</span>${kostenZeile ? `<span class="ab-unter">${esc(kostenZeile)}</span>` : ''}`}
-        <span class="ab-knoepfe">${j != null && !sz.basis ? `<button type="button" class="iconbtn" data-act="schritt-bearbeiten" data-sz="${idx}" data-index="${j}" title="Schritt bearbeiten" aria-label="Schritt bearbeiten">${icon('pencil', 18)}</button>` : ''}${(erw.length || kos.length) ? icon(offen ? 'chevron-down' : 'chevron-right', 18) : art ? icon(art[2], 18) : ''}</span>
+        <span class="ab-knoepfe">${(erw.length || kos.length) ? icon(offen ? 'chevron-down' : 'chevron-right', 18) : art ? icon(art[2], 18) : ''}</span>
       </div>
     </div>
     ${offen ? ereignisDetail(f, erw, kos, fluss, e.ereignis) : ''}
@@ -405,7 +404,7 @@ export function ansichtVergleich(f) {
   const res = ergebnisse(f);
   const kopf = seitenkopf({
     schritt: 'Schritt 5 von 5', titel: 'Zusammenfassung',
-    lead: 'Erbschaft- und Schenkungsteuer sowie Notar- und Grundbuchkosten je Szenario, über beide Sterbereihenfolgen gewichtet.',
+    lead: 'Erbschaft- und Schenkungsteuer sowie Notar- und Grundbuchkosten je Szenario, über beide Sterbereihenfolgen gewichtet. Darunter Ablauf, Freibeträge und Kosten je Ereignis.',
     aktionen: `${aktionsknopf('drucken-mandant', 'Mandantenfassung (PDF/Druck)', { ico: 'printer', cls: 'primary' })}${aktionsknopf('drucken', 'Interne Ansicht drucken', { ico: 'printer' })}`
   });
   if (res.fehlt) return `${kopf}${fehltBox(res.fehlt)}`;
@@ -468,37 +467,16 @@ function detail(f, res, id) {
   if (!r || r.fehler) return '';
   const lauf = gewaehlterLauf(r);
   const gewichtet = r.laeufe.length > 1 && (!state.detail.reihenfolge || state.detail.reihenfolge === 'gewichtet');
-  const tab = state.detail.tab || 'zeitachse';
+  const tab = ['zeitachse', 'hinweise', 'ziel'].includes(state.detail.tab) ? state.detail.tab : 'zeitachse';
   const z = zielabgleich(f, lauf);
   const hinweise = lauf.hinweise.slice().sort((a, b) => rang(a.stufe) - rang(b.stufe));
-  const tabs = [['zeitachse', 'Ablauf'], ['erwerbe', 'Steuer je Erwerb'], ['kosten', 'Kosten'], ['hinweise', `Hinweise (${hinweise.length})`], ['ziel', 'Gestaltungsziel']];
+  const tabs = [['zeitachse', 'Ablauf und Steuern'], ['hinweise', `Hinweise (${hinweise.length})`], ['ziel', 'Gestaltungsziel']];
 
   let inhalt = '';
   if (tab === 'zeitachse') {
-    inhalt = `<div class="zeitstrahl">${lauf.zeitachse.map((e) => {
-      const st = summe(lauf.erwerbe.filter((x) => x.datum === e.datum), (x) => x.steuer);
-      const ko = summe(lauf.kosten.filter((x) => x.datum === e.datum), (x) => x.summe);
-      return `<div class="ereignis fest${e.typ === 'erbfall' ? ' erbfall' : ''}"><div><div class="datum">${datum(e.datum)}</div><div class="tt">${esc(e.titel)}</div><div class="tx">${esc(e.text)}</div></div><div class="num" style="text-align:right;font-size:13px">${st ? `Steuer ${euro(st)}` : 'keine Steuer'}<br><span class="muted">${ko ? `Kosten ${euro(ko)}` : ''}</span></div></div>`;
-    }).join('')}</div>`;
-  } else if (tab === 'erwerbe') {
-    inhalt = `<div class="tabellen-wrap"><table class="tabelle"><thead><tr><th>Datum</th><th>Erwerb</th><th class="r">Bereicherung</th><th class="r">Freibetrag</th><th class="r">Steuerpflichtig</th><th class="r">Satz</th><th class="r">Steuer</th></tr></thead><tbody>
-      ${lauf.erwerbe.map((e) => {
-        const offen = state.detail.offen?.[e.id];
-        return `<tr class="klickbar" data-act="erwerb-umschalten" data-id="${e.id}"><td class="num">${datum(e.datum)}</td><td><b style="font-weight:500;color:var(--ink)">${esc(nameVon(f, e.von))} → ${esc(nameVon(f, e.an))}</b><div class="unter">${esc(e.art)}${e.stkl ? ` · StKl ${e.stkl}` : ''}${e.vorerwerbe?.length ? ` · ${anzahl(e.vorerwerbe.length, 'Vorerwerb', 'Vorerwerbe', 'm')} (§ 14)` : ''}</div></td>
-          <td class="r num">${euro(e.bereicherung)}</td><td class="r num">${e.steuerfrei ? '–' : euro(e.freibetragGenutzt + (e.versorgungsfreibetragGenutzt || 0))}</td><td class="r num">${e.steuerfrei ? `<span class="marke gut">${esc(e.steuerfreiGrund)}</span>` : euro(e.stpfl)}</td><td class="r num">${e.satz ? prozent(e.satz) : '–'}</td><td class="r num"><b style="font-weight:600;color:var(--ink)">${euro(e.steuer)}</b></td></tr>
-          ${offen ? `<tr><td></td><td colspan="6">${erwerbDetail(f, e)}</td></tr>` : ''}`;
-      }).join('')}
-      <tr class="summe"><td></td><td>Summe</td><td></td><td></td><td></td><td></td><td class="r num">${euro(lauf.summen.steuer)}</td></tr>
-    </tbody></table></div><p class="small muted" style="margin-top:8px">Zeile antippen für die Herleitung.</p>`;
-  } else if (tab === 'kosten') {
-    inhalt = lauf.kosten.length ? `<div class="tabellen-wrap"><table class="tabelle"><thead><tr><th>Datum</th><th>Urkunde / Vorgang</th><th class="r">Notar (brutto)</th><th class="r">Gericht, Register</th><th class="r">Summe</th></tr></thead><tbody>
-      ${lauf.kosten.map((k, i) => {
-        const offen = state.detail.offen?.['k' + i];
-        return `<tr class="klickbar" data-act="erwerb-umschalten" data-id="k${i}"><td class="num">${datum(k.datum)}</td><td>${esc(k.titel)}</td><td class="r num">${euro(k.notarBrutto)}</td><td class="r num">${euro(k.gerichtSumme + k.sonstSumme)}</td><td class="r num"><b style="font-weight:600;color:var(--ink)">${euro(k.summe)}</b></td></tr>
-        ${offen ? `<tr><td></td><td colspan="4">${kostenDetail(k)}</td></tr>` : ''}`;
-      }).join('')}
-      <tr class="summe"><td></td><td>Summe</td><td></td><td></td><td class="r num">${euro(lauf.summen.kosten)}</td></tr>
-    </tbody></table></div><p class="small muted" style="margin-top:8px">Überschlägig nach GNotKG (Tabelle B) einschließlich 19 % Umsatzsteuer auf Notargebühren und Auslagen; Grundbuch- und Gerichtsgebühren ohne Umsatzsteuer.</p>` : '<p class="muted">Keine Kosten in diesem Szenario.</p>';
+    inhalt = `${ablauf(f, r.sz, f.szenarien.indexOf(r.sz), r)}
+      <p class="small muted mit-info" style="margin-top:12px">Ereignis antippen für Freibeträge, Steuer und Kosten je Person; Zeile antippen für die Herleitung. ${infoTip(`Erbfälle nach ${annahmeText(f)}. „Erhält“ ist der Verkehrswert, der der Person durch das Ereignis netto zufließt, vor Steuern und Kosten.`)}</p>
+      <p class="small muted" style="margin-top:4px">Kosten überschlägig nach GNotKG (Tabelle B) einschließlich 19 % Umsatzsteuer auf Notargebühren und Auslagen; Grundbuch- und Gerichtsgebühren ohne Umsatzsteuer.</p>`;
   } else if (tab === 'hinweise') {
     inhalt = `<div class="hinweise">${hinweise.map(hinweisBox).join('') || '<p class="muted">Keine Hinweise.</p>'}</div>`;
   } else {
@@ -507,7 +485,7 @@ function detail(f, res, id) {
 
   const zielOk = z.erfuellt;
   return `<section class="detail abschnitt">
-    <div class="detail-kopf"><h2>${esc(r.sz.name)}</h2>
+    <div class="detail-kopf"><h2>${esc(r.sz.name)}</h2>${r.sz.basis ? '' : aktionsknopf('szenario-bearbeiten', 'Szenario bearbeiten', { ico: 'pencil', cls: 'klein', daten: { id: r.sz.id } })}
       ${r.laeufe.length > 1 ? `<div class="mit-info"><div class="seg" role="group"><button type="button" data-act="reihenfolge" data-id="gewichtet" aria-pressed="${gewichtet}">Gewichtet</button>${r.laeufe.map((l) => `<button type="button" data-act="reihenfolge" data-id="${l.erstversterbender}" aria-pressed="${!gewichtet && l === lauf}">${esc(laufLabel(f, l))} · ${prozent(r.gewichte[r.laeufe.indexOf(l)])}</button>`).join('')}</div>${infoTip('„Gewichtet“ mittelt beide Sterbereihenfolgen nach ihrer statistischen Wahrscheinlichkeit (Sterbetafel). Ablauf, Erwerbe und Kosten zeigen dann die wahrscheinlichere Reihenfolge.')}</div>` : ''}
     </div>
     <div class="kachel-titel small muted">${gewichtet ? 'Gewichtet über beide Sterbereihenfolgen' : `Bei Reihenfolge: ${esc(laufLabel(f, lauf))}`}</div>

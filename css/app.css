@@ -348,7 +348,9 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .ereignis::before { content: ''; position: absolute; left: -29px; top: 20px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--brand); background: var(--surface); }
 .ereignis.erbfall { cursor: default; background: var(--surface); border: 1px solid var(--line); }
 .ereignis.erbfall::before { background: var(--ink); border-color: var(--ink); }
-.ereignis.fest { cursor: default; }
+.ereignis.fest, .ereignis.kompakt { cursor: default; }
+.ereignis.kompakt:hover { border-color: transparent; }
+.ereignis.kompakt.erbfall:hover { border-color: var(--line); }
 .ereignis .datum { font: 500 13px/1 var(--font-display); color: var(--brand); font-variant-numeric: tabular-nums; }
 .ereignis .tt { font: 500 16px/1.3 var(--font-display); color: var(--ink); margin-top: 6px; }
 .ereignis .tx { margin-top: 4px; font-size: 13px; color: var(--muted); }
@@ -578,16 +580,10 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 /* Belastung nach Herkunft */
 .belastung { background: var(--surface-warm); padding: 20px 22px; }
+.bl-fuss { margin-top: 14px; }
 .bl-kopf { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .bl-kopf .lbl { display: block; font-size: 12px; color: var(--muted); }
 .bl-kopf .fig { display: block; margin: 6px 0 2px; font: 500 28px/1.1 var(--font-display); color: var(--ink); }
-.bl-zeilen { display: grid; gap: 8px; margin-top: 16px; }
-.bl-zeile { display: grid; grid-template-columns: minmax(120px, 230px) minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: 14px; color: var(--text); }
-.bl-zeile b { font: 500 14px/1 var(--font-display); color: var(--ink); min-width: 96px; text-align: right; }
-.bl-balken { height: 10px; background: var(--surface-sunk); display: block; }
-.bl-balken span { display: block; height: 100%; border-radius: 0 4px 4px 0; }
-.bl-balken .steuer { background: var(--brand); }
-.bl-balken .kosten { background: var(--p2); }
 
 /* Vermögensfluss je Ereignis */
 .ab-fluss { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; }
@@ -601,8 +597,6 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .vs-assets .chip svg { flex: none; }
 
 @media (max-width: 600px) {
-  .bl-zeile { grid-template-columns: 1fr auto; }
-  .bl-zeile .bl-balken { grid-column: 1 / -1; grid-row: 2; }
 }
 
 /* Vergleich: stehende Säulen */
@@ -709,14 +703,11 @@ details.aufklapp[open] > summary { margin-bottom: 16px; }
 
 /* Ausgangslage als Zeile */
 .basis-block { background: var(--surface-warm); padding: 14px 18px; margin-bottom: 32px; }
-.basis-block > summary { gap: 12px; }
-details.basis-block[open] > summary { margin-bottom: 0; }
 .basis-zeile { display: flex; flex: 1; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
 .basis-zeile .bz-t { display: inline-flex; align-items: center; gap: 6px; font: 500 16px/1.2 var(--font-display); color: var(--ink); }
 .basis-zeile .bz-w { font: 500 22px/1.1 var(--font-display); color: var(--ink); }
 .basis-zeile .bz-z { font-size: 13px; }
-.basis-zeile .bz-a { margin-left: auto; font: 500 13px/1 var(--font-display); color: var(--brand); }
-details.basis-block[open] .bz-a { visibility: hidden; }
+.basis-zeile .bz-a { margin-left: auto; }
 
 /* Vorschläge */
 .vs-knoepfe { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -734,7 +725,6 @@ details.bs-hinweise-wrap[open] > summary { margin-bottom: 6px; }
 .bs-karte .bs-text-inhalt ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
 
 .kachel-titel { margin-bottom: 8px; }
-.belastung.ohne-kopf { padding: 0; background: transparent; }
 .sz-ablauf > summary { flex-wrap: wrap; }
 .sz-ablauf > summary .small { margin-left: 4px; }
 /* Bausteintexte bleiben in der sichtbaren Breite, auch wenn die Matrix seitlich scrollt */
