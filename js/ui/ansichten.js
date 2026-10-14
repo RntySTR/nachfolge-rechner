@@ -96,7 +96,7 @@ export function ansichtFamilie(f) {
       schritt: 'Schritt 1 von 5',
       titel: 'Familie',
       lead: 'Wer gibt Vermögen weiter und wer soll es erhalten? Für jede Person genügen Vorname, Geburtsdatum und Geschlecht.',
-      aktionen: segment('__ehepaar', f.geber.b ? 'ja' : 'nein', [['ja', 'Ehepaar'], ['nein', 'Einzelperson']])
+      aktionen: `${!f.vermoegen.length && f.personen.every((p) => !p.vorname) ? aktionsknopf('schnellstart', 'Schnellstart', { ico: 'sparkles', cls: 'primary' }) : ''}${segment('__ehepaar', f.geber.b ? 'ja' : 'nein', [['ja', 'Ehepaar'], ['nein', 'Einzelperson']])}`
     })}
     ${fehlt ? `<div class="hinweis annahme" style="margin-bottom:16px">${icon('calendar', 20)}<div><div class="tt">${fehlt === 1 ? 'Es fehlt noch ein Geburtsdatum' : `Es fehlen noch die Geburtsdaten (${fehlt}×)`}</div><div class="tx">Das Alter bestimmt den Wert von Nießbrauch und Wohnungsrecht sowie die angenommene Lebenserwartung.</div></div></div>` : ''}
     ${baum}
@@ -191,10 +191,30 @@ export function ansichtAusgangslage(f) {
 
 // ------------------------------------------------------------------ Gestaltungsziel (Teil von Schritt 3)
 
+/** Vorschau: Wer erhält nach dem Ziel am Ende wie viel (Verkehrswert), als Balken und Beträge. */
+function zielVorschau(f) {
+  const z = f.ziel || {};
+  const werte = {};
+  let gesamt = 0, offen = 0;
+  for (const a of f.vermoegen) {
+    const w = Math.max(0, vw(a) - (Number(a.verbindlichkeit) || 0));
+    gesamt += w;
+    let soll = z.modus === 'quote' ? z.quoten : z.assets?.[a.id];
+    const s = Object.values(soll || {}).reduce((x, y) => x + (Number(y) || 0), 0);
+    if (!soll || !(s > 0)) { offen += w; continue; }
+    for (const [p, q] of Object.entries(soll)) werte[p] = (werte[p] || 0) + (w * (Number(q) || 0)) / s;
+  }
+  if (!gesamt) return '';
+  const anteile = Object.entries(werte).filter(([, w]) => w > 0).sort((a, b) => b[1] - a[1]);
+  return `<div class="zielvorschau">
+    <div class="balken">${anteile.map(([p, w]) => `<span style="width:${(w / gesamt) * 100}%;background:${personFarbe(f, p)}" title="${esc(nameVon(f, p))}: ${euro(w)}"></span>`).join('')}${offen > 0 ? `<span class="offen" style="width:${(offen / gesamt) * 100}%" title="ohne Ziel: ${euro(offen)}"></span>` : ''}</div>
+    <div class="legende">${anteile.map(([p, w]) => `<span class="eintrag"><span class="punkt" style="background:${personFarbe(f, p)}"></span>${esc(nameVon(f, p))} erhält <b>${euro(w)}</b> <small class="muted">(${Math.round((w / gesamt) * 100)} %)</small></span>`).join('')}${offen > 0 ? `<span class="eintrag"><span class="punkt" style="background:var(--surface-sunk);border:1px dashed var(--border)"></span>ohne Ziel <b>${euro(offen)}</b></span>` : ''}</div>
+  </div>`;
+}
+
 function zielTeil(f) {
   const empfaenger = f.personen.filter((p) => p.rolle !== 'geber');
   const z = f.ziel;
-  const nb = z.nebenbedingungen || {};
   let inhalt;
   if (z.modus === 'quote') {
     inhalt = `<div class="flaeche raster">
@@ -218,19 +238,19 @@ function zielTeil(f) {
       </div>`;
     }).join('') : `<div class="leer"><h3>Noch keine Vermögenswerte</h3><p>Zuerst das Vermögen erfassen, dann die gewünschte Verteilung.</p>${aktionsknopf('nav', 'Zum Vermögen', { daten: { ziel: 'vermoegen' } })}</div>`;
   }
+  const kinder = empfaenger.filter((p) => p.rolle === 'kind');
+  const schnell = f.vermoegen.length && z.modus !== 'quote' ? `<div class="chips" style="margin-bottom:14px">
+      ${kinder.length ? `<button type="button" class="btn klein" data-act="ziel-schnell" data-art="kinder">${icon('users', 16)}Alle Werte: Kinder zu gleichen Teilen</button>` : ''}
+      ${empfaenger.map((p) => `<button type="button" class="btn ghost klein" data-act="ziel-schnell" data-art="person" data-id="${p.id}">Alle Werte an ${esc(nameVon(f, p.id))}</button>`).join('')}
+    </div>` : '';
   return `
     <section class="abschnitt" id="gestaltungsziel">
-      <div class="abschnitt-kopf"><h2 class="mit-info">Gestaltungsziel ${infoTip('Bei wem soll das Vermögen am Ende liegen? Die Zusammenfassung prüft für jedes Szenario, ob dieses Ziel erreicht wird.')}</h2>${segment('ziel.modus', z.modus || 'asset', [['asset', 'Je Vermögenswert'], ['quote', 'Nach Quoten']])}</div>
+      <div class="abschnitt-kopf"><h2 class="mit-info">Gestaltungsziel ${infoTip('Bei wem soll das Vermögen am Ende liegen? Jede Gestaltung wird daran gemessen, ob dieses Ziel erreicht wird.')}</h2>${segment('ziel.modus', z.modus || 'asset', [['asset', 'Je Vermögenswert'], ['quote', 'Nach Quoten']])}</div>
+      ${zielVorschau(f)}
+      ${schnell}
       <div class="raster" style="gap:16px">${inhalt}</div>
     </section>
-    <section class="abschnitt">
-      <h2 class="mit-info">Rahmenbedingungen ${infoTip('Steuern die Vorschläge des Rechners und die Hinweise.')}</h2>
-      <div class="flaeche raster">
-        ${f.geber.b ? schalter('ziel.nebenbedingungen.laengerlebenderAbgesichert', nb.laengerlebenderAbgesichert, 'Der Längerlebende muss abgesichert bleiben', 'Vorschläge begrenzen Vermächtnisse beim ersten Erbfall auf die Hälfte des Nachlasses, geben ihm den Folgenießbrauch und verzichten auf die Ausschlagung; Warnung bei Überschreitung.') : ''}
-        ${schalter('ziel.nebenbedingungen.enkelEinbeziehen', nb.enkelEinbeziehen, 'Enkel dürfen einbezogen werden', 'Erlaubt Gestaltungen über die Enkelfreibeträge.')}
-        ${f.geber.b ? schalter('ziel.nebenbedingungen.keineSchaukel', nb.keineSchaukel, 'Keine Güterstandsschaukel', 'Etwa wenn die Mandanten einen Wechsel des Güterstands ablehnen.') : ''}
-      </div>
-    </section>`;
+    <p class="small muted" style="margin-top:14px">Wie weit zu Lebzeiten übertragen werden darf, wie stark der Längerlebende abgesichert bleibt und ob Enkel oder eine Güterstandsschaukel in Betracht kommen, wird unter „Gestaltungen › Optionen der Suche“ festgelegt.</p>`;
 }
 
 void zahlText; void textfeld;

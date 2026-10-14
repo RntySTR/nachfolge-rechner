@@ -7,8 +7,8 @@ const SCHRITTE_LISTE = [
   ['users', 'Familie', 'Vermögensgeber, Kinder und Enkel erfassen.'],
   ['wallet', 'Vermögen', 'Immobilien, Depots und Geld mit Verkehrswert und Eigentumsanteilen.'],
   ['scale', 'Ausgangslage und Ziel', 'Bestehende Verfügungen, frühere Schenkungen und das Gestaltungsziel: wer soll was erhalten.'],
-  ['route', 'Szenarien', 'Vorschläge prüfen, eigene Szenarien anlegen und deren Schritte bearbeiten.'],
-  ['git-compare-arrows', 'Zusammenfassung', 'Szenarien mit der Ausgangslage vergleichen, Steuer und Kosten je Ereignis einsehen, ausdrucken.']
+  ['route', 'Gestaltungen', 'Vorschläge und eigene Szenarien als Karten; eine Gestaltung öffnen, um sie zu verstehen und anzupassen.'],
+  ['git-compare-arrows', 'Vergleich und Bericht', 'Alle Gestaltungen gegenüberstellen, zwei im Detail vergleichen, Mandantenfassung drucken.']
 ];
 
 /** Seiten des Tutorials. `inhalt` ist fertiges HTML aus festen Texten. */
@@ -42,24 +42,22 @@ const SEITEN = [
       </ul>`
   },
   {
-    titel: 'Vorschläge und Szenarien',
+    titel: 'Gestaltungen',
     inhalt: () => `
-      <p>Im Schritt „Szenarien“ prüft der Rechner übliche Gestaltungen, rechnet jede Kombination durch und zeigt die günstigsten, die das Ziel erreichen.</p>
+      <p>Im Schritt „Gestaltungen“ stehen die Ausgangslage, die Vorschläge des Rechners und eigene Szenarien als Karten nebeneinander, jede mit Ersparnis, Ziel und Risikoampel.</p>
       <ul class="tut-liste">
-        <li>Bausteine: Erbvertrag mit Freibetragsvermächtnissen, Schenkung unter Nießbrauchsvorbehalt (auch in Tranchen), Vermögensausgleich unter Ehegatten, Güterstandsschaukel, Familienheim an Ehegatten oder Kinder, Geldschenkungen, Pflichtteil, Ausschlagung, Schenkungen an Enkel. Kombiniert wird stufenweise, auch mehrstufig (z. B. Ausgleich unter Ehegatten, danach Weitergabe an die Kinder in Tranchen, dazu Erbvertrag).</li>
-        <li>Je Zeile ein Baustein, je Spalte ein Vorschlag. „Konzept lesen“ erklärt einen Vorschlag als Ablauf, zerlegt die Ersparnis nach Bausteinen, zeigt Risiken als Ampel und gibt Umsetzungshinweise.</li>
+        <li>Der Rechner kombiniert Bausteine stufenweise, auch mehrstufig: Erbvertrag mit Freibetragsvermächtnissen, Schenkung unter Nießbrauchsvorbehalt (auch in Tranchen), Vermögensausgleich unter Ehegatten, Güterstandsschaukel, Familienheim an Ehegatten oder Kinder, Geldschenkungen, Pflichtteil, Ausschlagung, Enkel.</li>
+        <li>„Optionen der Suche“ steuert, wie viel zu Lebzeiten übergehen darf und wie stark der Längerlebende abgesichert bleibt.</li>
+        <li>Eine Karte öffnen: Die Gestaltungsseite erklärt das Konzept, zerlegt die Ersparnis nach Bausteinen, zeigt Schritte, Steuern je Ereignis mit Rechenweg, Robustheit unter anderen Annahmen, Pflichtteile und Ziel.</li>
+        <li>„Übernehmen und anpassen“ macht aus einem Vorschlag ein eigenes Szenario, dessen Schritte sich ändern lassen; die Zahlen folgen sofort.</li>
         <li>Der Kopfbalken zeigt auf jedem Schritt Ausgangslage und besten Vorschlag; ein Prüfbericht meldet Eingabefehler, bevor sie das Ergebnis verzerren.</li>
-        <li>Gibt es weniger als drei Vorschläge, zeigt der Rechner zusätzlich verworfene Kombinationen mit dem Grund, etwa Mehrbelastung oder Ziel verfehlt.</li>
-        <li>„Als Szenario übernehmen“ legt eine Spalte als eigenes Szenario an. Eigene Szenarien lassen sich aus Schritten wie Schenkung, Güterstandsschaukel oder Testament zusammenstellen.</li>
       </ul>`
   },
   {
-    titel: 'Ergebnis und Grenzen',
+    titel: 'Vergleich, Bericht und Grenzen',
     inhalt: () => `
       <ul class="tut-liste">
-        <li>Die Zusammenfassung stellt jedes Szenario der Ausgangslage „Ohne Gestaltung“ gegenüber: Steuern und Kosten, gewichtet über beide Sterbereihenfolgen.</li>
-        <li>Dort stehen auch Ablauf, Freibeträge, Steuer und Kosten je Ereignis, der Rechenweg jedes Erwerbs mit Normen und die bezifferten Pflichtteils- und Ergänzungsansprüche je Erbfall.</li>
-        <li>Die Mandantenfassung (PDF/Druck) passt auf eine Seite.</li>
+        <li>„Vergleich und Bericht“ stellt alle Gestaltungen als Säulen gegenüber, zwei davon im Detail mit Differenzspalte, und druckt die Mandantenfassung auf einer Seite.</li>
         <li>Nicht abgebildet: Betriebsvermögen (§§ 13a–13c ErbStG), Familiengesellschaften, Auslandsbezug, Vor- und Nacherbschaft, Einkommensteuer.</li>
         <li>Spätere Gesetzesänderungen, auch infolge anhängiger Verfahren vor dem Bundesverfassungsgericht, sind nicht berücksichtigt.</li>
       </ul>
@@ -79,7 +77,7 @@ export function tutorialHtml(i, { leer = true } = {}) {
   const punkte = SEITEN.map((_, k) => `<button type="button" class="tut-punkt" data-act="tutorial-seite" data-i="${k}" aria-label="Seite ${k + 1} von ${n}" aria-current="${k === s}"></button>`).join('');
   const zurueck = s > 0 ? `<button type="button" class="btn" data-act="tutorial-seite" data-i="${s - 1}">${icon('arrow-left', 18)}Zurück</button>` : '<span></span>';
   const weiter = letzte
-    ? `<div class="tut-start"><button type="button" class="btn" data-act="tutorial-beispiel">${icon('sparkles', 18)}Beispielfall ansehen</button><button type="button" class="btn primary" data-act="tutorial-schliessen" data-fokus="1">${leer ? 'Mit leerem Fall beginnen' : 'Schließen'}</button></div>`
+    ? `<div class="tut-start"><button type="button" class="btn" data-act="tutorial-beispiel">Beispielfall ansehen</button><button type="button" class="btn" data-act="tutorial-schnellstart">${icon('sparkles', 18)}Schnellstart</button><button type="button" class="btn primary" data-act="tutorial-schliessen" data-fokus="1">${leer ? 'Mit leerem Fall beginnen' : 'Schließen'}</button></div>`
     : `<button type="button" class="btn primary" data-act="tutorial-seite" data-i="${s + 1}" data-fokus="1">Weiter${icon('arrow-right', 18)}</button>`;
   return `<div class="tut-hg" data-act="tutorial-schliessen"></div>
     <div class="tut" role="dialog" aria-modal="true" aria-labelledby="tut-titel">

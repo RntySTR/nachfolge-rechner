@@ -1,12 +1,14 @@
 // Einstieg: Navigation, Rendering, Ereignisse.
 
-import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispielLaden, fallDuplizieren, fallLoeschen, exportieren, importieren, personEntfernen, vermoegenEntfernen, tutorialMerken, istLeer } from './ui/store.js';
+import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispielLaden, fallDuplizieren, fallLoeschen, exportieren, importieren, personEntfernen, vermoegenEntfernen, tutorialMerken, istLeer, migriere } from './ui/store.js';
 import { tutorialHtml, TUTORIAL_SEITEN } from './ui/tutorial.js';
 import { ansichtFamilie, ansichtVermoegen, ansichtAusgangslage } from './ui/ansichten.js';
-import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer, setzeNeuzeichnen, kopfzahlen, pruefbericht, rechenwegAlsText, ampelPunkt } from './ui/ergebnisse.js';
+import { ergebnisse, vorschlaegeFuer, setzeNeuzeichnen, kopfzahlen, pruefbericht, rechenwegAlsText, ampelPunkt } from './ui/ergebnisse.js';
+import { ansichtGestaltungen, ansichtGestaltung, ansichtVergleich, gestaltungVon } from './ui/gestaltungen.js';
 import { befundeJeAnsicht } from './engine/pruefung.js';
 import { euro } from './ui/format.js';
 import { sheetInhalt } from './ui/sheets.js';
+import { fallAusSchnellstart, schnellstartVorlage } from './ui/schnellstart.js';
 import { mandantenfassung } from './ui/mandant.js';
 import { icon } from './ui/icons.js';
 import { esc, parseZahl, parseQuote, parseDatum, anzahl } from './ui/format.js';
@@ -16,8 +18,8 @@ const ANSICHTEN = [
   ['familie', 'Familie', 'users', ansichtFamilie],
   ['vermoegen', 'Vermögen', 'wallet', ansichtVermoegen],
   ['ausgangslage', 'Ausgangslage und Ziel', 'scale', ansichtAusgangslage],
-  ['szenarien', 'Szenarien', 'route', ansichtSzenarien],
-  ['vergleich', 'Zusammenfassung', 'git-compare-arrows', ansichtVergleich]
+  ['gestaltungen', 'Gestaltungen', 'route', ansichtGestaltungen],
+  ['vergleich', 'Vergleich und Bericht', 'git-compare-arrows', ansichtVergleich]
 ];
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -70,9 +72,10 @@ function render() {
   const scrollSheet = $('.sheet-inhalt')?.scrollTop;
 
   renderNav(f);
-  const idx = Math.max(0, ANSICHTEN.findIndex(([k]) => k === state.ansicht));
+  const unter = state.ansicht === 'gestaltung';
+  const idx = Math.max(0, ANSICHTEN.findIndex(([k]) => k === (unter ? 'gestaltungen' : state.ansicht)));
   const ansicht = ANSICHTEN[idx];
-  $('#content').innerHTML = kopfbalken(f, ansicht[0]) + ansicht[3](f) + schrittNav(idx);
+  $('#content').innerHTML = unter ? ansichtGestaltung(f) + schrittNav(idx, { unter: true }) : kopfbalken(f, ansicht[0]) + ansicht[3](f) + schrittNav(idx);
   $('#mobil-titel').textContent = f.titel || 'Fall';
   renderSheet(f);
   renderTutorial();
@@ -124,15 +127,15 @@ function kopfbalken(f, ansicht) {
       ? `<span class="kb-zelle"><span class="lbl">Bester Vorschlag ${ampelPunkt(best.ampel)}</span><span class="fig num gut">${euro(best.ergebnis.erwartet)}</span><small>− ${euro(best.ersparnis)}</small></span>`
       : `<span class="kb-zelle"><span class="lbl">Vorschläge</span><span class="fig">–</span><small>keine Ersparnis gefunden</small></span>`;
   const eigene = eig ? `<span class="kb-zelle"><span class="lbl">Eigenes Szenario</span><span class="fig num">${euro(eig.erwartet)}</span><small>${esc(eig.sz.name)}</small></span>` : '';
-  return `<button type="button" class="kopfbalken" data-nav="szenarien" title="Zu den Szenarien">
+  return `<button type="button" class="kopfbalken" data-nav="gestaltungen" title="Zu den Gestaltungen">
     <span class="kb-zelle"><span class="lbl">Ohne Gestaltung</span><span class="fig num">${b ? euro(b.erwartet) : '–'}</span><small>Steuern und Kosten, gewichtet</small></span>
     ${vorschlag}${eigene}
     <span class="kb-rechts">${pruef}${icon('arrow-right', 16)}</span>
   </button>`;
 }
 
-function schrittNav(idx) {
-  const zurueck = ANSICHTEN[idx - 1];
+function schrittNav(idx, { unter = false } = {}) {
+  const zurueck = unter ? ANSICHTEN[idx] : ANSICHTEN[idx - 1];
   const weiter = ANSICHTEN[idx + 1];
   return `<nav class="schrittnav" aria-label="Schritte">
     ${zurueck ? `<button type="button" class="btn" data-nav="${zurueck[0]}">${icon('arrow-left', 18)}Zurück: ${zurueck[1]}</button>` : '<span></span>'}
@@ -156,7 +159,7 @@ function schrittStand(f, k) {
     const hatZiel = z.modus === 'quote' ? Object.values(z.quoten || {}).some((q) => Number(q) > 0) : Object.keys(z.assets || {}).length > 0;
     return hatZiel && f.stichtag ? { ok: true } : {};
   }
-  if (k === 'szenarien') return f.szenarien.some((s) => !s.basis) ? { ok: true } : {};
+  if (k === 'gestaltungen') return f.szenarien.some((s) => !s.basis) ? { ok: true } : {};
   return {};
 }
 
@@ -169,7 +172,8 @@ function renderNav(f) {
     const marke = bf?.fehler ? `<span class="stand badge fehler" title="${bf.fehler} Fehler in den Eingaben">${bf.fehler}</span>`
       : bf?.warnung ? `<span class="stand badge warnung" title="${bf.warnung} Warnungen">${bf.warnung}</span>`
       : st.fehlt ? `<span class="stand fehlt" title="${esc(st.fehlt)}" aria-label="${esc(st.fehlt)}"></span>` : st.ok ? `<span class="stand ok" aria-label="vollständig">${icon('check', 14)}</span>` : '';
-    return `<li><button type="button" data-nav="${k}" aria-current="${state.ansicht === k ? 'page' : 'false'}"><span class="n">${icon(ico, 18)}</span><span>${i + 1}&nbsp;${t}</span>${marke}</button></li>`;
+    const aktiv = state.ansicht === k || (state.ansicht === 'gestaltung' && k === 'gestaltungen');
+    return `<li><button type="button" data-nav="${k}" aria-current="${aktiv ? 'page' : 'false'}"><span class="n">${icon(ico, 18)}</span><span>${i + 1}&nbsp;${t}</span>${marke}</button></li>`;
   }).join('');
 }
 
@@ -250,11 +254,18 @@ function bausteineVeraltet(f, pfad) {
 function setzeBindung(pfad, wert, optionen = {}) {
   aendern((f) => {
     if (pfad.startsWith('__fall.')) { setzePfad(f, pfad.slice(7), wert); return; }
+    if (pfad.startsWith('__schnell.')) {
+      const s = state.schnell || (state.schnell = schnellstartVorlage());
+      setzePfad(s, pfad.slice(10), pfad === '__schnell.ehepaar' ? wert === 'ja' : wert);
+      return;
+    }
     if (pfad.endsWith('.ausgleichModus')) {
       setzePfad(f, pfad.replace(/\.ausgleichModus$/, '.ausgleich'), wert === 'berechnet' ? 'berechnet' : 0);
       return;
     }
     if (pfad.startsWith('selbstnutzung.')) { f.selbstnutzung[pfad.split('.')[1]] = !!wert; return; }
+    if (pfad === 'ziel.nebenbedingungen.absicherung') { f.ziel.nebenbedingungen.absicherung = wert; f.ziel.nebenbedingungen.laengerlebenderAbgesichert = wert !== 'gering'; return; }
+    if (pfad === 'ziel.nebenbedingungen.laengerlebenderAbgesichert') { f.ziel.nebenbedingungen.laengerlebenderAbgesichert = !!wert; if (!wert) f.ziel.nebenbedingungen.absicherung = 'gering'; else if (f.ziel.nebenbedingungen.absicherung === 'gering') f.ziel.nebenbedingungen.absicherung = 'normal'; return; }
     setzePfad(f, pfad, wert);
     bausteineVeraltet(f, pfad);
     // Folgeänderungen
@@ -288,6 +299,20 @@ const AKTIONEN = {
   'tutorial-oeffnen': () => { state.sheet = null; state.tutorial = 0; render(); },
   'tutorial-seite': (d) => { state.tutorial = Math.max(0, Math.min(TUTORIAL_SEITEN - 1, Number(d.i) || 0)); render(); },
   'tutorial-schliessen': () => { tutorialSchliessen(); render(); },
+  'tutorial-schnellstart': () => { tutorialSchliessen(); state.schnell = schnellstartVorlage(); state.sheet = { typ: 'schnellstart' }; render(); },
+  schnellstart: () => { state.schnell = state.schnell || schnellstartVorlage(); state.sheet = { typ: 'schnellstart' }; render(); },
+  'schnell-neu': (d) => { const s = state.schnell; if (d.liste === 'kinder') s.kinder.push({ vorname: '', geburt: '' }); else s.immobilien.push({ bezeichnung: '', verkehrswert: '', nutzung: 'vermietet_wohnen', eigentum: s.ehepaar ? 'haelfte' : 'a', jahresertrag: '' }); render(); },
+  'schnell-entfernen': (d) => { state.schnell[d.liste].splice(Number(d.index), 1); render(); },
+  'schnell-anlegen': () => {
+    const s = state.schnell;
+    if (!s.a.vorname || !s.a.geburt || (s.ehepaar && (!s.b.vorname || !s.b.geburt))) { toast('Bitte Vorname und Geburtsdatum der Vermögensgeber angeben'); return; }
+    if (!s.immobilien.some((x) => Number(x.verkehrswert) > 0) && !(Number(s.geld.betrag) > 0)) { toast('Bitte mindestens einen Vermögenswert mit Betrag angeben'); return; }
+    const f = migriere(fallAusSchnellstart(s));
+    const aktuell = fall();
+    if (aktuell && istLeer(aktuell)) state.faelle = state.faelle.filter((x) => x !== aktuell);
+    state.faelle.push(f); state.aktivId = f.id; state.schnell = null; state.sheet = null; state.ansicht = 'gestaltungen';
+    speichern(); render(); window.scrollTo(0, 0); toast('Fall angelegt');
+  },
   'tutorial-beispiel': () => { tutorialSchliessen(); state.sheet = null; beispielLaden(); render(); window.scrollTo(0, 0); toast('Beispielfall geladen'); },
   nav: (d) => { state.ansicht = d.ziel; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
 
@@ -315,6 +340,14 @@ const AKTIONEN = {
     const nutzung = f.vermoegen.some((x) => x.nutzung === 'familienheim') ? 'vermietet_wohnen' : 'familienheim';
     f.vermoegen.push({ id, bezeichnung: '', art: 'immobilie', nutzung, verkehrswert: '', steuerwert: '', jahresertrag: '', verbindlichkeit: '', eigentum: eig });
     state.sheet = { typ: 'vermoegen', id };
+  }),
+  'ziel-schnell': (d) => aendern((f) => {
+    f.ziel.modus = 'asset';
+    f.ziel.assets = f.ziel.assets || {};
+    const kinder = f.personen.filter((p) => p.rolle === 'kind').map((p) => p.id);
+    for (const a of f.vermoegen) {
+      f.ziel.assets[a.id] = d.art === 'kinder' ? Object.fromEntries(kinder.map((id) => [id, 1 / kinder.length])) : { [d.id]: 1 };
+    }
   }),
   'bewg-uebernehmen': (d) => { aendern((f) => { const a = f.vermoegen.find((x) => x.id === d.id); if (a) a.steuerwert = Number(d.wert); }); toast('Steuerwert übernommen'); },
   'vermoegen-bearbeiten': (d) => { state.sheet = { typ: 'vermoegen', id: d.id }; render(); },
@@ -374,22 +407,53 @@ const AKTIONEN = {
 
   'szenario-neu': () => aendern((f) => {
     const id = neueId('sz');
-    f.szenarien.push({ id, name: `Szenario ${f.szenarien.length}`, schritte: [], erbfallOptionen: {} });
+    f.szenarien.push({ id, name: `Eigenes Szenario ${f.szenarien.filter((s) => !s.basis).length + 1}`, schritte: [], erbfallOptionen: {} });
     state.szenarioId = id;
-    state.ansicht = 'szenarien';
+    state.gestaltungId = id;
+    state.gTab = 'schritte';
+    state.ansicht = 'gestaltung';
+    window.scrollTo(0, 0);
   }),
-  'szenario-waehlen': (d) => { state.szenarioId = d.id; render(); },
-  'szenario-duplizieren': () => aendern((f) => {
-    const s = f.szenarien.find((x) => x.id === state.szenarioId);
+  'gestaltung-oeffnen': (d) => {
+    const g = gestaltungVon(fall(), d.id);
+    state.gestaltungId = d.id;
+    if (g?.art === 'eigen') state.szenarioId = d.id;
+    if (g?.art === 'basis' && (!state.gTab || state.gTab === 'konzept' || state.gTab === 'schritte')) state.gTab = 'steuern';
+    state.ansicht = 'gestaltung'; state.sheet = null; speichern(); render(); window.scrollTo(0, 0);
+  },
+  'gestaltung-tab': (d) => { state.gTab = d.id; render(); },
+  'gestaltung-anpassen': (d) => {
+    const g = gestaltungVon(fall(), d.id);
+    if (!g || g.art !== 'vorschlag') return;
+    aendern((f) => {
+      const sz = tiefeKopie(g.sz);
+      sz.id = neueId('sz');
+      sz.vorschlagId = g.id;
+      sz.name = `${g.name}, angepasst`;
+      sz.module = tiefeKopie(g.x.module);
+      sz.schritte.forEach((st) => (st.id = neueId('st')));
+      f.szenarien.push(sz);
+      state.szenarioId = sz.id;
+      state.gestaltungId = sz.id;
+      state.gTab = 'schritte';
+      state.ansicht = 'gestaltung';
+    });
+    toast('Als eigenes Szenario übernommen');
+    window.scrollTo(0, 0);
+  },
+  'szenario-duplizieren': (d) => aendern((f) => {
+    const s = f.szenarien.find((x) => x.id === (d.id || state.szenarioId));
+    if (!s) return;
     const k = tiefeKopie(s);
     k.id = neueId('sz'); k.name = `${s.name} (Kopie)`; delete k.basis;
     k.schritte.forEach((st) => (st.id = neueId('st')));
     f.szenarien.push(k);
     state.szenarioId = k.id;
+    state.gestaltungId = k.id;
   }),
-  'szenario-loeschen': () => {
+  'szenario-loeschen': (d) => {
     if (!confirmen('Szenario löschen?')) return;
-    aendern((f) => { f.szenarien = f.szenarien.filter((s) => s.id !== state.szenarioId); state.szenarioId = f.szenarien[0]?.id; });
+    aendern((f) => { const id = d.id || state.szenarioId; f.szenarien = f.szenarien.filter((s) => s.id !== id); state.szenarioId = f.szenarien.find((s) => !s.basis)?.id; state.ansicht = 'gestaltungen'; });
   },
   'schritt-neu': (d) => aendern((f) => {
     const i = f.szenarien.findIndex((s) => s.id === state.szenarioId);
@@ -428,42 +492,10 @@ const AKTIONEN = {
   }),
   'baustein-umschalten': (d) => { state.offenBs = state.offenBs || {}; state.offenBs[d.id] = !state.offenBs[d.id]; render(); },
   'vorschlaege-umschalten': () => { state.vorschlaegeOffen = state.vorschlaegeOffen === false; render(); },
-  'vorschlag-uebernehmen': (d) => {
-    const v = vorschlaegeFuer(fall());
-    const x = v.liste?.find((y) => y.id === d.id);
-    const vorhanden = fall().szenarien.find((s) => s.vorschlagId === d.id);
-    if (vorhanden) {
-      aendern((f) => {
-        f.szenarien = f.szenarien.filter((s) => s.vorschlagId !== d.id);
-        if (state.szenarioId === vorhanden.id) state.szenarioId = f.szenarien[0]?.id ?? null;
-        if (state.detail.szenarioId === vorhanden.id) state.detail.szenarioId = null;
-      });
-      toast('Szenario wieder entfernt');
-      return;
-    }
-    if (!x) return;
-    aendern((f) => {
-      const sz = tiefeKopie(x.szenario);
-      sz.id = neueId('sz');
-      sz.vorschlagId = x.id;
-      sz.name = `Vorschlag: ${x.bausteine.join(', ')}`;
-      sz.module = tiefeKopie(x.module);
-      sz.schritte.forEach((st) => (st.id = neueId('st')));
-      f.szenarien.push(sz);
-      state.szenarioId = sz.id;
-    });
-    toast('Vorschlag als Szenario übernommen');
-  },
-  'vorschlag-ansehen': (d) => { state.sheet = { typ: 'vorschlag', id: d.id }; render(); },
   'rechenweg-kopieren': async (d) => {
     const text = rechenwegAlsText(fall(), d.id);
     try { await navigator.clipboard.writeText(text); toast('Rechenweg kopiert'); } catch (e) { window.prompt('Rechenweg (kopieren mit Strg+C):', text); }
   },
-  'detail-waehlen': (d) => { state.detail.szenarioId = d.id; render(); },
-  'details-ansehen': (d) => { state.detail.szenarioId = d.id; state.detail.tab = 'zeitachse'; state.ansicht = 'vergleich'; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
-  'szenario-bearbeiten': (d) => { state.szenarioId = d.id; state.ansicht = 'szenarien'; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
-  reihenfolge: (d) => { state.detail.reihenfolge = d.id; render(); },
-  tab: (d) => { state.detail.tab = d.id; render(); },
   'erwerb-umschalten': (d) => { state.detail.offen[d.id] = !state.detail.offen[d.id]; render(); },
   drucken: () => druckeEineSeite(true),
   'drucken-mandant': () => druckeEineSeite(false),
@@ -587,6 +619,8 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('change', (e) => {
+  const wahl = e.target.closest('[data-act-change="vergleich-wahl"]');
+  if (wahl) { state.vergleich = { ...(state.vergleich || {}), [wahl.dataset.seite]: wahl.value }; render(); return; }
   const el = e.target.closest('[data-bind]');
   if (!el) return;
   const wert = wertAusElement(el);
