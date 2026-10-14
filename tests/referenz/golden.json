@@ -1,0 +1,77 @@
+{
+  "geld_kind": {
+    "bereicherung": 1000000,
+    "stpfl": 600000,
+    "steuer": 90000
+  },
+  "geld_kind_vorerwerb": {
+    "bereicherung": 1000000,
+    "stpfl": 900000,
+    "steuer": 171000
+  },
+  "haerteausgleich": {
+    "bereicherung": 710000,
+    "stpfl": 310000,
+    "steuer": 38000
+  },
+  "mfh_niessbrauch": {
+    "jahreswert": 54000,
+    "vervielfaeltiger": 8.282,
+    "kapitalwert": 447228,
+    "befreiung13d": 130000.0,
+    "last": 402505,
+    "bereicherung": 767495.0,
+    "stpfl": 367400,
+    "steuer": 55110
+  },
+  "enkel": {
+    "stpfl": 300000,
+    "steuer": 33000
+  },
+  "urenkel": {
+    "stpfl": 400000,
+    "steuer": 60000
+  },
+  "geschwister": {
+    "stpfl": 480000,
+    "steuer": 120000
+  },
+  "dritter": {
+    "stpfl": 480000,
+    "steuer": 144000
+  },
+  "ehegatte_erbfall": {
+    "bereicherung": 1585000,
+    "stpfl": 829000,
+    "steuer": 157510
+  },
+  "abfindung_klein": {
+    "stpfl": 0,
+    "steuer": 0
+  },
+  "abfindung_gross": {
+    "stpfl": 100000,
+    "steuer": 11000
+  },
+  "pflichtteilsergaenzung": {
+    "beruecksichtigt": 350000.0,
+    "fiktiv": 1350000.0,
+    "gesamt": 337500.0,
+    "ordentlich": 250000.0,
+    "ergaenzung": 87500.0
+  },
+  "zusammenrechnung_mit_steuer": {
+    "stpfl": 800000,
+    "steuer": 107000
+  },
+  "tarif": {
+    "I:75000": 5250,
+    "I:75100": 5300,
+    "I:300000": 33000,
+    "I:300100": 33050,
+    "I:600000": 90000,
+    "I:600100": 90050,
+    "I:6000000": 1140000,
+    "I:6000100": 1140050
+  }
+}

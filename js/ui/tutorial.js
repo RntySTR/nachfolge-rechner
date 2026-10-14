@@ -37,7 +37,7 @@ const SEITEN = [
       <ul class="tut-liste">
         <li>Personen nur mit Vornamen und Geburtsdatum erfassen. Das Datum geht als TT.MM.JJJJ, auch als Ziffernfolge (22031949).</li>
         <li>Je Vermögenswert den Verkehrswert und die Eigentumsanteile angeben. Der Steuerwert ist optional; ohne Angabe gilt der Verkehrswert.</li>
-        <li>Steuerwerte von Grundbesitz sind Eingaben, der Rechner führt keine Bedarfsbewertung durch.</li>
+        <li>Für Immobilien schätzt „Steuerwert schätzen“ den Grundbesitzwert nach BewG (Ertrags- oder Sachwertverfahren) als Anhalt; Feststellungsbescheid und Gutachterausschuss gehen vor.</li>
         <li>Alle Eingaben speichern sich automatisch im Browser dieses Geräts. Über „Fälle“ lässt sich ein Fall als Datei sichern und auf einem anderen Gerät öffnen.</li>
       </ul>`
   },
@@ -47,7 +47,8 @@ const SEITEN = [
       <p>Im Schritt „Szenarien“ prüft der Rechner übliche Gestaltungen, rechnet jede Kombination durch und zeigt die günstigsten, die das Ziel erreichen.</p>
       <ul class="tut-liste">
         <li>Bausteine: Erbvertrag mit Freibetragsvermächtnissen, Schenkung unter Nießbrauchsvorbehalt (auch in Tranchen), Vermögensausgleich unter Ehegatten, Güterstandsschaukel, Familienheim an Ehegatten oder Kinder, Geldschenkungen, Pflichtteil, Ausschlagung, Schenkungen an Enkel. Kombiniert wird stufenweise, auch mehrstufig (z. B. Ausgleich unter Ehegatten, danach Weitergabe an die Kinder in Tranchen, dazu Erbvertrag).</li>
-        <li>Je Zeile ein Baustein, je Spalte ein Vorschlag.</li>
+        <li>Je Zeile ein Baustein, je Spalte ein Vorschlag. „Konzept lesen“ erklärt einen Vorschlag als Ablauf, zerlegt die Ersparnis nach Bausteinen, zeigt Risiken als Ampel und gibt Umsetzungshinweise.</li>
+        <li>Der Kopfbalken zeigt auf jedem Schritt Ausgangslage und besten Vorschlag; ein Prüfbericht meldet Eingabefehler, bevor sie das Ergebnis verzerren.</li>
         <li>Gibt es weniger als drei Vorschläge, zeigt der Rechner zusätzlich verworfene Kombinationen mit dem Grund, etwa Mehrbelastung oder Ziel verfehlt.</li>
         <li>„Als Szenario übernehmen“ legt eine Spalte als eigenes Szenario an. Eigene Szenarien lassen sich aus Schritten wie Schenkung, Güterstandsschaukel oder Testament zusammenstellen.</li>
       </ul>`
@@ -57,7 +58,7 @@ const SEITEN = [
     inhalt: () => `
       <ul class="tut-liste">
         <li>Die Zusammenfassung stellt jedes Szenario der Ausgangslage „Ohne Gestaltung“ gegenüber: Steuern und Kosten, gewichtet über beide Sterbereihenfolgen.</li>
-        <li>Dort stehen auch Ablauf, Freibeträge, Steuer und Kosten je Ereignis. Im Schritt „Szenarien“ werden nur die Schritte bearbeitet; „Steuerdetails ansehen“ springt zur Zusammenfassung.</li>
+        <li>Dort stehen auch Ablauf, Freibeträge, Steuer und Kosten je Ereignis, der Rechenweg jedes Erwerbs mit Normen und die bezifferten Pflichtteils- und Ergänzungsansprüche je Erbfall.</li>
         <li>Die Mandantenfassung (PDF/Druck) passt auf eine Seite.</li>
         <li>Nicht abgebildet: Betriebsvermögen (§§ 13a–13c ErbStG), Familiengesellschaften, Auslandsbezug, Vor- und Nacherbschaft, Einkommensteuer.</li>
         <li>Spätere Gesetzesänderungen, auch infolge anhängiger Verfahren vor dem Bundesverfassungsgericht, sind nicht berücksichtigt.</li>

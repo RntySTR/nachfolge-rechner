@@ -4,7 +4,7 @@
 import { RECHTSSTAND as R } from './rechtsstand.js';
 import {
   ehegatte, geberIds, slotVon, name, steuerklasse, versorgungsfreibetrag, gesetzlicheErbquoten,
-  pflichtteilsquote, istMinderjaehrig, eigeneKinder, personMap
+  pflichtteilsquote, istMinderjaehrig, eigeneKinder, personMap, abkoemmlingeVon
 } from './personen.js';
 import { berechneErwerb, restFreibetrag } from './erwerb.js';
 import {
@@ -47,7 +47,9 @@ function initZustand(fall, szenario) {
     lebend: new Set(fall.personen.filter((p) => !p.vorverstorben).map((p) => p.id)),
     offeneVermaechtnisse: [],
     erbfallErwerbe: {}, // erblasserId -> { an -> {wert, steuer} }
-    todesdaten: {}
+    todesdaten: {},
+    pflichtteilsverzichte: new Set(), // "erblasserId|personId"
+    pflichtteile: [] // bezifferte (latente) Pflichtteils- und Ergänzungsansprüche je Erbfall
   };
 }
 
@@ -484,7 +486,22 @@ function schenkung(st, s) {
       ...urkunde({ titel: s.titel || 'Überlassungsvertrag', notar, gericht, grundbuchabrufe: 2 * (immob.length + sachImmob.length) })
     });
   }
+  if (s.pflichtteilsverzicht) {
+    const gegenueber = [von, ...(s.pflichtteilsverzichtBeide && ehegatte(fall, von) ? [ehegatte(fall, von)] : [])];
+    for (const [an] of verteilung) for (const g of gegenueber) merkeVerzicht(st, g, an);
+    hinweis(st, 'info', 'Pflichtteilsverzicht ohne Steuerwirkung', `Der Pflichtteilsverzicht von ${verteilung.map(([an]) => name(fall, an)).join(', ')} ist keine Gegenleistung: Der Pflichtteilsanspruch entsteht erst mit dem Erbfall und lässt sich nicht in Geld veranschlagen (§ 7 Abs. 3 ErbStG; BFH II R 48/21 zum Verzicht auf künftige Ansprüche). Er mindert die Schenkungsteuer nicht, schließt aber Pflichtteils- und Ergänzungsansprüche gegenüber ${gegenueber.map((g) => name(fall, g)).join(' und ')} aus.`, { norm: '§ 7 Abs. 3 ErbStG, § 2346 Abs. 2 BGB' });
+  }
   st.zeitachse.push({ ereignis: st.ereignis, schrittId: s.id, datum: s.datum, typ: 'schenkung', titel: s.titel || 'Schenkung', text: beschreibeSchenkung(st, s, teile, verteilung, nutzung) });
+}
+
+/** Pflichtteilsverzicht gegenüber einem Erblasser, mit Wirkung für die Abkömmlinge des Verzichtenden (§ 2349 BGB). */
+function merkeVerzicht(st, erblasser, person) {
+  st.pflichtteilsverzichte.add(`${erblasser}|${person}`);
+  for (const a of abkoemmlingeVon(st.fall, person)) merkeVerzicht(st, erblasser, a.id);
+}
+
+function hatVerzichtet(st, erblasser, person) {
+  return st.pflichtteilsverzichte.has(`${erblasser}|${person}`);
 }
 
 function beschreibeSchenkung(st, s, teile, verteilung, nutzung) {
@@ -680,12 +697,28 @@ function verfuegung(st, s) {
   }
   if (s.pflichtteilsverzicht?.length) {
     for (const pid of s.pflichtteilsverzicht) {
+      if (!st.lebend.has(pid)) continue;
       const wertPv = summe(slots, (sl) => {
         const id = fall.geber[sl];
         const lebendOhne = new Set([...st.lebend].filter((x) => x !== id));
         return pflichtteilsquote(fall, id, pid, lebendOhne, st.gueterstand) * Math.max(0, vermoegenVon(st, id));
       });
-      kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: `Pflichtteilsverzicht ${name(fall, pid)}`, notar: [{ kv: '21100', text: 'Pflichtteilsverzichtsvertrag', wert: wertPv, satz: 2.0, min: 120 }] }) });
+      const abfindung = Number(s.abfindung?.[pid]) || 0;
+      for (const sl of slots) merkeVerzicht(st, fall.geber[sl], pid);
+      // Abfindung für den Verzicht: Schenkung des künftigen Erblassers (§ 7 Abs. 1 Nr. 5 ErbStG), anteilig je Erblasser
+      if (abfindung > 0) {
+        for (const sl of slots) {
+          const von = fall.geber[sl];
+          const betrag = Math.round(abfindung / slots.length);
+          bucheErwerb(st, {
+            datum: s.datum, von, an: pid, art: 'Abfindung für Pflichtteilsverzicht', titel: `Abfindung für Pflichtteilsverzicht (${name(fall, pid)})`,
+            positionen: [{ text: 'Abfindung für den Verzicht auf den Pflichtteil', steuerwert: betrag, befreiungen: [], lasten: [], norm: '§ 7 Abs. 1 Nr. 5 ErbStG' }], schrittId: s.id
+          });
+          zahle(st, von, pid, betrag, 'Abfindung Pflichtteilsverzicht');
+        }
+        hinweis(st, 'info', 'Abfindung für Pflichtteilsverzicht', `Die Abfindung von ${fmtEuro(abfindung)} für ${name(fall, pid)} gilt als Schenkung des künftigen Erblassers; Steuerklasse und Freibetrag richten sich nach dem Verhältnis zum Erblasser (§ 7 Abs. 1 Nr. 5, § 15 ErbStG). Bei Zahlung durch einen Dritten (etwa ein Geschwister) gilt das Verhältnis zum Erblasser seit 2017 nicht mehr (BFH II R 25/15).`, { norm: '§ 7 Abs. 1 Nr. 5 ErbStG' });
+      }
+      kostenBuchen(st, { datum: s.datum, schrittId: s.id, ...urkunde({ titel: `Pflichtteilsverzicht ${name(fall, pid)}`, notar: [{ kv: '21100', text: 'Pflichtteilsverzichtsvertrag', wert: Math.max(wertPv, abfindung), satz: 2.0, min: 120 }] }) });
     }
   }
   st.zeitachse.push({ ereignis: st.ereignis, schrittId: s.id, datum: s.datum, typ: 'verfuegung', titel: s.titel || (form === 'erbvertrag' ? 'Erbvertrag' : 'Testament'), text: beschreibeVerfuegungen(st, slots) });
@@ -839,6 +872,7 @@ function erbfall(st, erblasser, datum, optionen = {}) {
   // 3b. Pflichtteile
   for (const pid of optionen.pflichtteil || []) {
     if (!st.lebend.has(pid) || quoten[pid]) continue;
+    if (hatVerzichtet(st, erblasser, pid)) { hinweis(st, 'warnung', 'Pflichtteil trotz Verzicht', `${name(fall, pid)} hat gegenüber ${name(fall, erblasser)} auf den Pflichtteil verzichtet; die Geltendmachung ist nicht möglich und wurde nicht gerechnet.`); continue; }
     const lebendOhne = new Set([...st.lebend].filter((x) => x !== erblasser));
     const pq = pflichtteilsquote(fall, erblasser, pid, lebendOhne, st.gueterstand);
     if (pq <= 0) continue;
@@ -1074,11 +1108,85 @@ function erbfall(st, erblasser, datum, optionen = {}) {
     hinweis(st, 'info', 'Erbschein erforderlich', `Ohne notarielle Verfügung von Todes wegen ist für die Grundbuchberichtigung nach ${name(fall, erblasser)} ein Erbschein nötig (§ 35 GBO).`, { norm: '§ 35 Abs. 1 GBO' });
   }
 
+  pflichtteileBeziffern(st, erblasser, datum, { nachlassVW, lastSumme, quoten, vmErwerbe, optionen });
+
   st.lebend.delete(erblasser);
   st.zeitachse.push({
     ereignis: st.ereignis, erblasser, datum, typ: 'erbfall', titel: `Erbfall ${name(fall, erblasser)}`,
     text: `${Object.entries(quoten).map(([id, q]) => `${name(fall, id)} ${fmtQuote(q)}`).join(', ') || 'keine Erben'}${ausschlagung ? ' · Ausschlagung Ehegatte' : ''}`
   });
+}
+
+// ---------------------------------------------------------------- Pflichtteil und Pflichtteilsergänzung (beziffert)
+
+/**
+ * Wert einer lebzeitigen Zuwendung für § 2325 BGB (Verkehrswert abzüglich Gegenleistungen und vorbehaltenem Nießbrauch)
+ * und ob die Zehnjahresfrist läuft. Sie läuft nicht bei umfassendem Nießbrauchsvorbehalt (BGH IV ZR 132/93) und nicht
+ * vor Auflösung der Ehe bei Zuwendungen an den Ehegatten (§ 2325 Abs. 3 S. 3 BGB); beim Wohnungsrecht läuft sie (BGH IV ZR 474/15).
+ */
+function schenkungFuerErgaenzung(st, e) {
+  const schritt = (st.szenario.schritte || []).find((x) => x.id === e.schrittId);
+  let wert = 0;
+  for (const p of e.positionen || []) {
+    const basis = p.verkehrswert != null ? p.verkehrswert : p.steuerwert;
+    const faktor = p.steuerwert > 0 && p.verkehrswert != null ? basis / p.steuerwert : 1;
+    const abzug = summe((p.lasten || []).filter((l) => /BewG|ErbStR|Gegenleistung/.test(l.norm || '') || /Gegenleistung|Nießbrauch|Wohnungsrecht/.test(l.text || '')), (l) => (l.kapitalwert != null ? l.kapitalwert : l.betrag) * (l.kapitalwert != null ? 1 : faktor));
+    wert += Math.max(0, basis - abzug);
+  }
+  const nutzung = schritt?.nutzung;
+  const vorbehalt = nutzung && nutzung.typ === 'niessbrauch' && (nutzung.berechtigte || [e.von]).includes(e.von);
+  const anEhegatten = ehegatte(st.fall, e.von) === e.an;
+  return { wert, fristLaeuft: !vorbehalt && !anEhegatten, grund: vorbehalt ? 'Nießbrauchsvorbehalt' : anEhegatten ? 'Ehegatte' : null };
+}
+
+function pflichtteileBeziffern(st, erblasser, datum, { nachlassVW, lastSumme, quoten, vmErwerbe, optionen }) {
+  const { fall } = st;
+  const lebendOhne = new Set([...st.lebend].filter((x) => x !== erblasser));
+  // Zuwendungen des Erblassers zu Lebzeiten (einschließlich erfasster Vorschenkungen)
+  const gaben = st.erwerbe.filter((e) => !e.erbfall && e.von === erblasser && !e.steuerfrei && e.art !== 'Zuwendungsnießbrauch');
+  const bewertet = gaben.map((e) => {
+    const { wert, fristLaeuft, grund } = schenkungFuerErgaenzung(st, e);
+    const jahre = jahreZwischen(e.datum, datum);
+    const faktor = !fristLaeuft ? 1 : jahre >= 10 ? 0 : Math.max(0, 1 - Math.floor(jahre) / 10);
+    return { e, wert, faktor, beruecksichtigt: wert * faktor, grund, jahre };
+  }).filter((g) => g.beruecksichtigt > 0.5);
+  const kandidaten = fall.personen.filter((p) => p.id !== erblasser && st.lebend.has(p.id) && p.rolle !== 'geber' || (p.id === ehegatte(fall, erblasser) && st.lebend.has(p.id)));
+  const zeilen = [];
+  for (const p of kandidaten) {
+    if (hatVerzichtet(st, erblasser, p.id)) continue;
+    const q = pflichtteilsquote(fall, erblasser, p.id, lebendOhne, st.gueterstand);
+    if (!(q > 0)) continue;
+    const eigene = summe(bewertet.filter((g) => g.e.an === p.id), (g) => g.beruecksichtigt);
+    const fremde = summe(bewertet.filter((g) => g.e.an !== p.id), (g) => g.beruecksichtigt);
+    const nachlassNetto = Math.max(0, nachlassVW);
+    const fiktiv = nachlassNetto + fremde + eigene;
+    const erbteil = quoten[p.id] ? quoten[p.id] * Math.max(0, nachlassVW - lastSumme) : 0;
+    const vermaechtnis = vmErwerbe.has(p.id) ? summe(vmErwerbe.get(p.id), (pos) => (pos.verkehrswert != null ? pos.verkehrswert : pos.steuerwert) - summe(pos.lasten || [], (l) => l.betrag)) : 0;
+    const pflichtteilErhalten = (optionen.pflichtteil || []).includes(p.id) && !quoten[p.id] ? q * nachlassNetto : 0;
+    const erhalten = erbteil + vermaechtnis + pflichtteilErhalten;
+    const ordentlich = quoten[p.id] ? 0 : q * nachlassNetto;
+    const gesamt = q * fiktiv;
+    const anspruch = Math.max(0, gesamt - eigene - erhalten);
+    const ergaenzung = Math.max(0, anspruch - Math.max(0, ordentlich - pflichtteilErhalten));
+    zeilen.push({ erblasser, datum, person: p.id, quote: q, nachlass: nachlassNetto, schenkungenFremd: fremde, schenkungenEigen: eigene, fiktiv, gesamt, erhalten, ordentlich: Math.max(0, ordentlich - pflichtteilErhalten), ergaenzung, anspruch, istErbe: !!quoten[p.id] });
+  }
+  st.pflichtteile.push(...zeilen);
+  const offen = zeilen.filter((z) => z.anspruch > 1000);
+  if (!offen.length) return;
+  const zielIds = new Set(fall.ziel?.modus === 'quote' ? Object.keys(fall.ziel.quoten || {}) : Object.values(fall.ziel?.assets || {}).flatMap((o) => Object.keys(o || {})));
+  // Berechtigte außerhalb des Gestaltungsziels (nicht die Vermögensgeber selbst) machen die Gestaltung angreifbar
+  const geber = geberIds(fall);
+  const aussen = offen.filter((z) => !zielIds.has(z.person) && !geber.includes(z.person));
+  const text = offen.map((z) => `${name(fall, z.person)} ${fmtEuro(z.anspruch)}${z.ergaenzung > 1000 ? ` (davon Ergänzung ${fmtEuro(z.ergaenzung)})` : ''}`).join(', ');
+  const mitFrist = bewertet.filter((g) => g.grund).map((g) => g.grund);
+  const fristText = mitFrist.includes('Nießbrauchsvorbehalt') ? ' Bei Schenkungen unter Nießbrauchsvorbehalt läuft die Zehnjahresfrist nicht; sie zählen voll.' : '';
+  const eheText = mitFrist.includes('Ehegatte') ? ' Zuwendungen an den Ehegatten zählen voll, weil die Frist erst mit Auflösung der Ehe beginnt.' : '';
+  hinweis(st, aussen.length ? 'risiko' : 'info', 'Pflichtteilsergänzung', `Nach dem Tod von ${name(fall, erblasser)} (${datum.slice(0, 4)}) bestehen latente Pflichtteils- und Ergänzungsansprüche: ${text}. Fiktiver Nachlass einschließlich abgeschmolzener Schenkungen der letzten zehn Jahre (§ 2325 Abs. 3 BGB).${fristText}${eheText}${aussen.length ? ` ${namen(fall, aussen.map((z) => z.person))} ${aussen.length > 1 ? 'sind' : 'ist'} nicht im Gestaltungsziel; ein Pflichtteilsverzicht oder eine Abfindung sichert die Gestaltung.` : ' Die Berechtigten sind im Gestaltungsziel; eine Pflichtteilsstrafklausel oder ein Verzicht sichert den Längerlebenden.'}`, { norm: '§§ 2303, 2325–2327 BGB', betrag: summe(offen, (z) => z.anspruch), personen: offen.map((z) => z.person) });
+}
+
+function namen(fall, ids) {
+  const n = ids.map((id) => name(fall, id));
+  return n.length > 1 ? `${n.slice(0, -1).join(', ')} und ${n[n.length - 1]}` : n[0] || '';
 }
 
 // ---------------------------------------------------------------- Kettenschenkung
@@ -1228,13 +1336,6 @@ export function simuliere(fall, szenario, optionen = {}) {
     }
   }
 
-  // Pflichtteilsergänzung
-  const gaben = st.erwerbe.filter((e) => !e.erbfall && !e.vorschenkung && geberIds(fall).includes(e.von) && !e.steuerfrei);
-  const pflichtteilsberechtigteAusserhalb = fall.personen.filter((p) => p.rolle === 'kind' && geberIds(fall).some((g) => p.bezug?.eltern?.includes(slotVon(fall, g))));
-  const anEhegatten = st.erwerbe.some((e) => !e.erbfall && !e.vorschenkung && ehegatte(fall, e.von) === e.an);
-  if ((gaben.length && pflichtteilsberechtigteAusserhalb.some((k) => !gaben.some((e) => e.an === k.id))) || anEhegatten) {
-    hinweis(st, 'info', 'Pflichtteilsergänzung', 'Schenkungen lösen Pflichtteilsergänzungsansprüche aus; sie schmelzen um 1/10 je Jahr ab. Bei vorbehaltenem umfassendem Nießbrauch beginnt die Frist nicht (BGH IV ZR 132/93), beim Wohnungsrecht regelmäßig doch (BGH IV ZR 474/15). Bei Zuwendungen an den Ehegatten (auch Familienheim und Güterstandsschaukel) beginnt sie nicht vor Auflösung der Ehe.', { norm: '§ 2325 Abs. 3 BGB' });
-  }
   const gemeinsameKonten = fall.vermoegen.filter((a) => a.art === 'geld' && Object.keys(a.eigentum || {}).length > 1);
   if (gemeinsameKonten.length) {
     hinweis(st, 'info', 'Gemeinschaftskonten', 'Bei Oder-Konten von Ehegatten richtet sich die Zurechnung nach der Herkunft der Mittel und der Innenabrede, nicht nach der Kontoinhaberschaft. Hat ein Ehegatte die Mittel allein eingezahlt, droht insoweit eine Schenkung.', { norm: '§ 7 Abs. 1 Nr. 1 ErbStG' });
@@ -1261,6 +1362,7 @@ export function simuliere(fall, szenario, optionen = {}) {
     fluesse,
     zeitachse: st.zeitachse.sort((x, y) => vergleicheDatum(x.datum, y.datum)),
     endEigentum: st.eigentum,
+    pflichtteile: st.pflichtteile,
     vermoegen: [...st.vermoegen.values()],
     summen: {
       steuer,

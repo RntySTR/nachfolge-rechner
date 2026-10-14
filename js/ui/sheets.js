@@ -7,6 +7,9 @@ import {
   feld, quoteEingabe, euroEingabe, personenChips, anteilEditor, aktionsknopf, iconknopf, rolleText
 } from './komponenten.js';
 import { holePfad, state } from './store.js';
+import { schaetzeGrundbesitzwert, GEBAEUDEARTEN } from '../engine/grundbesitz.js';
+import { sheetVorschlag } from './ergebnisse.js';
+import { aufklapp } from './komponenten.js';
 import { kontextFuer, standardJahre } from '../engine/auswertung.js';
 import { prozent } from './format.js';
 
@@ -23,6 +26,7 @@ export function sheetInhalt(f, sh) {
     case 'faelle': return sheetFaelle(f);
     case 'info': return sheetInfo();
     case 'annahmen': return sheetAnnahmen(f);
+    case 'vorschlag': return sheetVorschlag(f, sh.id);
     default: return { titel: '', inhalt: '' };
   }
 }
@@ -109,6 +113,7 @@ function sheetVermoegen(f, id) {
         ${eurofeld(immo ? 'Jahresreinertrag bzw. Mietwert' : 'Jährlicher Ertrag', `${pf}.jahresertrag`, a.jahresertrag, { hilfe: 'Grundlage für Nießbrauch und Wohnungsrecht. Ohne Angabe: 3 % des Steuerwerts.' })}
         ${eurofeld('Verbindlichkeit', `${pf}.verbindlichkeit`, a.verbindlichkeit, { hilfe: immo ? 'z. B. valutierende Grundschuld.' : '' })}
       </div>
+      ${immo ? bewgSchaetzung(f, pf, a) : ''}
     </div>
     <div class="gruppe"><div class="gt">Eigentum</div>
       <div class="feld"><div class="lbl">Schnellwahl</div>
@@ -121,6 +126,63 @@ function sheetVermoegen(f, id) {
       ${feld('', `<textarea class="input" rows="3" data-bind="${pf}.notiz" placeholder="z. B. Vorerbschaft, Bindungen, Grundbuchblatt">${esc(a.notiz || '')}</textarea>`)}
     </div>`;
   return { titel: a.bezeichnung || 'Vermögenswert', inhalt, fuss: aktionsknopf('vermoegen-loeschen', 'Entfernen', { ico: 'trash-2', cls: 'klein gefahr', daten: { id: a.id } }) };
+}
+
+/** Schätzhilfe für den Grundbesitzwert (§§ 176 ff. BewG), aufklappbar im Vermögenswert. */
+function bewgSchaetzung(f, pf, a) {
+  const e = a.bewg || {};
+  const p = `${pf}.bewg`;
+  const art = e.art || (a.nutzung === 'vermietet_wohnen' ? 'mfh' : a.nutzung === 'vermietet_gewerbe' ? 'geschaeft' : 'efh');
+  const ertrag = ['mfh', 'gemischt', 'geschaeft'].includes(art);
+  const efhArtig = ['efh', 'zfh', 'dhh', 'rmh'].includes(art);
+  let ergebnis = '';
+  const bereit = Number(e.flaeche) > 0 && Number(e.bodenrichtwert) > 0 && (ertrag ? Number(e.rohertrag) > 0 : Number(e.wohnflaeche) > 0 || Number(e.bgf) > 0);
+  if (bereit) {
+    const r = schaetzeGrundbesitzwert({ ...e, art, stichtag: f.stichtag, wohnflaeche: e.wohnflaeche ?? a.wohnflaeche, rohertrag: e.rohertrag ?? a.jahresertrag });
+    const vw = Number(a.verkehrswert) || 0;
+    ergebnis = `<div class="bewg-ergebnis">
+      <div class="bewg-kopf"><div><span class="lbl">${r.verfahren === 'ertragswert' ? 'Ertragswert' : 'Sachwert'} (geschätzt)</span><span class="fig num">${euro(r.wert)}</span>${vw ? `<span class="small muted">${Math.round((r.wert / vw) * 100)} % des Verkehrswerts</span>` : ''}</div>
+        ${aktionsknopf('bewg-uebernehmen', 'Als Steuerwert übernehmen', { ico: 'check', cls: 'klein primary', daten: { id: a.id, wert: r.wert } })}</div>
+      <div class="erwerb-detail">${r.zeilen.map((z) => `<div class="z${z.art === 'minus' ? ' minus' : ''}"><span>${esc(z.text)}${z.norm ? ` <span class="norm">${esc(z.norm)}</span>` : ''}</span><span class="num">${z.art === 'info' && z.betrag < 100 ? z.betrag.toLocaleString('de-DE') : euro(z.betrag)}</span></div>`).join('')}</div>
+      <ul class="bs-hinweise">${r.hinweise.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
+    </div>`;
+  } else {
+    ergebnis = '<p class="small muted">Für die Schätzung werden Grundstücksfläche, Bodenrichtwert und ' + (ertrag ? 'die Jahresnettokaltmiete' : 'die Wohnfläche') + ' benötigt.</p>';
+  }
+  const inhalt = `<div class="bewg">
+    <p class="small muted">Vereinfachte Bedarfsbewertung nach §§ 176 ff. BewG (Rechtsstand JStG 2022, Baupreisindex und Bewirtschaftungskosten 2026). Ein Anhalt, keine Feststellung; Vergleichswerte und Faktoren des Gutachterausschusses gehen vor.</p>
+    ${auswahl('Grundstücksart', `${p}.art`, art, GEBAEUDEARTEN.map(([k, t]) => [k, t]))}
+    <div class="raster zwei">
+      ${zahlfeld('Grundstücksfläche', `${p}.flaeche`, e.flaeche, { einheit: 'm²' })}
+      ${eurofeld('Bodenrichtwert je m²', `${p}.bodenrichtwert`, e.bodenrichtwert, { hilfe: 'BORIS des jeweiligen Landes.' })}
+    </div>
+    <div class="raster zwei">
+      ${feld('Baujahr', `<input class="input zahl" type="text" inputmode="numeric" maxlength="4" data-bind="${p}.baujahr" data-typ="zahl" value="${esc(e.baujahr ?? '')}" placeholder="z. B. 1985">`)}
+      ${zahlfeld('Wohnfläche', `${p}.wohnflaeche`, e.wohnflaeche ?? a.wohnflaeche, { einheit: 'm²' })}
+    </div>
+    ${ertrag ? `<div class="raster zwei">
+      ${eurofeld('Jahresnettokaltmiete (üblich)', `${p}.rohertrag`, e.rohertrag ?? a.jahresertrag, { hilfe: 'Übliche Miete, nicht die tatsächliche (§ 186 BewG).' })}
+      ${zahlfeld('Anzahl Wohnungen', `${p}.wohnungen`, e.wohnungen, { einheit: 'WE' })}
+    </div>
+    <div class="raster zwei">
+      ${zahlfeld('Garagen / Stellplätze', `${p}.garagen`, e.garagen, { einheit: 'Stk.' })}
+      ${art !== 'mfh' ? zahlfeld('Gewerblicher Anteil', `${p}.gewerbeanteil`, e.gewerbeanteil, { einheit: '0–1', hilfe: 'Anteil der gewerblichen Wohn-/Nutzfläche.' }) : zahlfeld('Nutzfläche gewerblich', `${p}.nutzflaeche`, e.nutzflaeche, { einheit: 'm²' })}
+    </div>
+    ${zahlfeld('Liegenschaftszins (optional)', `${p}.liegenschaftszins`, e.liegenschaftszins, { einheit: 'z. B. 0,04', hilfe: 'Ohne Angabe gilt § 188 Abs. 2 BewG.' })}` : `
+    <div class="raster zwei">
+      ${feld('Standardstufe', segment(`${p}.standard`, String(e.standard || 3), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']], { voll: true }), '1 einfachst … 3 Basis (nach 1995) … 5 aufwendig.')}
+      ${zahlfeld('Brutto-Grundfläche (optional)', `${p}.bgf`, e.bgf, { einheit: 'm²', hilfe: 'Ohne Angabe aus der Wohnfläche geschätzt.' })}
+    </div>
+    ${efhArtig ? `${feld('Keller', segment(`${p}.keller`, e.keller === false ? 'nein' : 'ja', [['ja', 'Unterkellert'], ['nein', 'Ohne Keller']], { voll: true }))}
+    ${feld('Dach', segment(`${p}.dach`, e.dach || 'ausgebaut', [['ausgebaut', 'DG ausgebaut'], ['nicht_ausgebaut', 'DG nicht ausgebaut'], ['flach', 'Flachdach']], { voll: true }))}` : ''}
+    ${art === 'we' ? zahlfeld('Wohnungen im Haus', `${p}.wohnungen`, e.wohnungen, { einheit: 'WE' }) : ''}
+    <div class="raster zwei">
+      ${zahlfeld('Regionalfaktor (optional)', `${p}.regionalfaktor`, e.regionalfaktor, { einheit: 'z. B. 1,1', hilfe: 'Vom Gutachterausschuss; sonst 1,0.' })}
+      ${zahlfeld('Sachwertfaktor (optional)', `${p}.sachwertfaktor`, e.sachwertfaktor, { einheit: 'z. B. 0,9', hilfe: 'Vom Gutachterausschuss; sonst Anlage 25.' })}
+    </div>`}
+    ${ergebnis}
+  </div>`;
+  return aufklapp(`bewg:${a.id}`, '<span class="bs-hinweise-t">Steuerwert schätzen (BewG)</span>', inhalt, { cls: 'bs-hinweise-wrap' });
 }
 
 // ------------------------------------------------------------------ Verfügung von Todes wegen
@@ -198,6 +260,10 @@ function sheetVorschenkung(f, index) {
 
 // ------------------------------------------------------------------ Schritte
 
+function ehegatteVon(f, id) {
+  return id === f.geber.a ? f.geber.b : id === f.geber.b ? f.geber.a : null;
+}
+
 function sheetSchritt(f, szIdx, index) {
   const s = f.szenarien[szIdx]?.schritte?.[index];
   if (!s) return { titel: '', inhalt: '' };
@@ -263,7 +329,8 @@ function schenkungEditor(f, pf, s) {
     <div class="gruppe"><div class="gt">Weitere Regelungen</div>
       ${schalter(`${pf}.steuerUebernahme`, s.steuerUebernahme, 'Schenker trägt die Schenkungsteuer', '§ 10 Abs. 2 ErbStG: die übernommene Steuer erhöht den Erwerb.')}
       ${schalter(`${pf}.rueckforderungsrecht`, s.rueckforderungsrecht, 'Rückforderungsrecht mit Vormerkung', 'Bei Ausübung erlischt die Steuer (§ 29 Abs. 1 Nr. 1 ErbStG).')}
-      ${schalter(`${pf}.pflichtteilsverzicht`, s.pflichtteilsverzicht, 'Gegenständlich beschränkter Pflichtteilsverzicht', 'Erhöht den Geschäftswert der Urkunde.')}
+      ${schalter(`${pf}.pflichtteilsverzicht`, s.pflichtteilsverzicht, 'Pflichtteilsverzicht der Erwerber', 'Keine Gegenleistung, mindert die Steuer nicht (§ 7 Abs. 3 ErbStG); schließt Pflichtteils- und Ergänzungsansprüche aus und erhöht den Geschäftswert.')}
+      ${s.pflichtteilsverzicht && f.geber.b && f.personen.some((p) => p.id === ehegatteVon(f, s.von)) ? schalter(`${pf}.pflichtteilsverzichtBeide`, s.pflichtteilsverzichtBeide, `Verzicht auch gegenüber ${nameVon(f, ehegatteVon(f, s.von))}`, 'Der Verzicht wirkt für die Abkömmlinge der Verzichtenden (§ 2349 BGB).') : ''}
       ${schalter(`${pf}.vollzug`, s.vollzug, 'Vollzugstätigkeiten (z. B. Löschungsunterlagen, Genehmigungen)')}
       ${schalter(`${pf}.betreuung`, s.betreuung, 'Betreuungstätigkeiten (z. B. Fälligkeitsmitteilung)')}
     </div>`;
@@ -309,7 +376,8 @@ function verfuegungsschrittEditor(f, pf, s) {
     ${fuer.map((sl) => `<div class="gruppe"><div class="gt">Regelung für den Tod von ${esc(nameVon(f, f.geber[sl]))}</div>${verfuegungEditor(f, `${pf}.regelungen.${sl}`, sl)}${fuer.length > 1 && sl === fuer[0] ? `<div>${aktionsknopf('verfuegung-spiegeln', `Für ${nameVon(f, f.geber[fuer[1]])} übernehmen`, { ico: 'copy', cls: 'klein', daten: { pfad: `${pf}.regelungen.${sl}`, slot: sl } })}</div>` : ''}</div>`).join('')}
     <div class="gruppe"><div class="gt">Pflichtteilsverzicht in eigener Urkunde</div>
       ${personenChips(f, `${pf}.pflichtteilsverzicht`, s.pflichtteilsverzicht, nichtGeber(f).filter((p) => p.rolle === 'kind'))}
-      <p class="small muted">Nur kostenseitig erfasst. Steuerlich mindert der Verzicht keinen Erwerb.</p>
+      ${(s.pflichtteilsverzicht || []).map((pid) => eurofeld(`Abfindung für ${nameVon(f, pid)} (optional)`, `${pf}.abfindung.${pid}`, s.abfindung?.[pid])).join('')}
+      <p class="small muted">Der Verzicht wirkt gegenüber den gewählten Erblassern und für die Abkömmlinge des Verzichtenden (§ 2349 BGB). Eine Abfindung gilt als Schenkung des Erblassers (§ 7 Abs. 1 Nr. 5 ErbStG) und wird je Erblasser zur Hälfte angesetzt; ohne Abfindung mindert der Verzicht keinen Erwerb.</p>
     </div>`;
 }
 
@@ -387,6 +455,7 @@ function sheetInfo() {
     inhalt: `<div class="gruppe">
       <p>Interner Rechner zur Planung der Vermögensnachfolge. Er rechnet Schenkung- und Erbschaftsteuer nach ErbStG und BewG sowie überschlägige Notar- und Grundbuchkosten nach GNotKG.</p>
       <p class="small muted">Vervielfältiger: BMF-Schreiben vom 21.10.2025 (Bewertungsstichtage ab 1.1.2026). Lebenserwartung: Sterbetafel 2022/2024. Gebühren: Tabelle B GNotKG.</p>
+      <p class="small muted">Pflichtteils- und Ergänzungsansprüche werden je Erbfall beziffert (§§ 2325–2327 BGB); der Steuerwert von Grundbesitz lässt sich nach BewG schätzen. Jeder Erwerb zeigt seinen Rechenweg.</p>
       <p class="small muted">Nicht abgebildet: Betriebsvermögen (§§ 13a–13c ErbStG), Familiengesellschaften, Auslandsbezug, Vor- und Nacherbschaft (§ 6 ErbStG), Einkommensteuer (nur Hinweise).</p>
       <p class="small muted">Alle Eingaben bleiben im Browser dieses Geräts. Personen werden nur mit Vornamen erfasst.</p>
       <div class="chips">${aktionsknopf('tutorial-oeffnen', 'Anleitung anzeigen', { ico: 'info', cls: 'klein' })}</div>
