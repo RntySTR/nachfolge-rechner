@@ -11,6 +11,9 @@ export const state = {
   aktivId: null,
   ansicht: 'familie',
   szenarioId: null,
+  gestaltungId: null,
+  gTab: null,
+  vergleich: null,
   detail: { szenarioId: null, reihenfolge: 'gewichtet', tab: 'zeitachse', offen: {} },
   sheet: null,
   /** Aktueller Schritt des Tutorials (0-basiert) oder null, wenn es geschlossen ist. */
@@ -33,7 +36,7 @@ export function laden() {
       state.faelle = Array.isArray(d.faelle) ? d.faelle.map(migriere) : [];
       state.aktivId = d.aktivId;
       // Schritt „Gestaltungsziel“ ist in „Ausgangslage und Ziel“ aufgegangen
-      state.ansicht = d.ansicht === 'ziel' ? 'ausgangslage' : d.ansicht || 'familie';
+      state.ansicht = d.ansicht === 'ziel' ? 'ausgangslage' : d.ansicht === 'szenarien' || d.ansicht === 'gestaltung' ? 'gestaltungen' : d.ansicht || 'familie';
     }
   } catch (e) {
     state.speicherFehler = true;

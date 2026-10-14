@@ -8,7 +8,7 @@ import {
 } from './komponenten.js';
 import { holePfad, state } from './store.js';
 import { schaetzeGrundbesitzwert, GEBAEUDEARTEN } from '../engine/grundbesitz.js';
-import { sheetVorschlag } from './ergebnisse.js';
+import { sheetSchnellstart } from './schnellstart.js';
 import { aufklapp } from './komponenten.js';
 import { kontextFuer, standardJahre } from '../engine/auswertung.js';
 import { prozent } from './format.js';
@@ -26,7 +26,7 @@ export function sheetInhalt(f, sh) {
     case 'faelle': return sheetFaelle(f);
     case 'info': return sheetInfo();
     case 'annahmen': return sheetAnnahmen(f);
-    case 'vorschlag': return sheetVorschlag(f, sh.id);
+    case 'schnellstart': return sheetSchnellstart();
     default: return { titel: '', inhalt: '' };
   }
 }
@@ -405,6 +405,7 @@ function sheetFaelle(f) {
       <div class="gruppe"><div class="gt">Alle Fälle auf diesem Gerät</div>${zeilen}</div>
       <div class="gruppe"><div class="gt">Neu</div>
         <div class="chips">
+          ${aktionsknopf('schnellstart', 'Schnellstart', { ico: 'sparkles', cls: 'klein primary' })}
           ${aktionsknopf('fall-neu', 'Ehepaar', { ico: 'users', cls: 'klein', daten: { ehepaar: 1 } })}
           ${aktionsknopf('fall-neu', 'Einzelperson', { ico: 'user', cls: 'klein', daten: { ehepaar: 0 } })}
           ${aktionsknopf('beispiel', 'Beispielfall laden', { ico: 'sparkles', cls: 'klein' })}

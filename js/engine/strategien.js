@@ -139,10 +139,10 @@ function bausteinTestament(fall) {
   for (const sl of slots) {
     const vms = [];
     if (ehepaar && kinderImZiel.length) {
-      vms.push({ id: neueId('vm'), typ: 'freibetrag', an: kinderImZiel, faelligkeit: 'erbfall', nurErsterErbfall: true, maxNachlassAnteil: nb.laengerlebenderAbgesichert === false ? undefined : 0.5 });
+      vms.push({ id: neueId('vm'), typ: 'freibetrag', an: kinderImZiel, faelligkeit: 'erbfall', nurErsterErbfall: true, maxNachlassAnteil: nb.laengerlebenderAbgesichert === false ? undefined : nb.absicherung === 'hoch' ? 1 / 3 : 0.5 });
     }
     if (nb.enkelEinbeziehen && enkel.length) {
-      vms.push({ id: neueId('vm'), typ: 'freibetrag', an: enkel, faelligkeit: 'erbfall', nurErsterErbfall: false, maxNachlassAnteil: nb.laengerlebenderAbgesichert === false ? undefined : 0.5 });
+      vms.push({ id: neueId('vm'), typ: 'freibetrag', an: enkel, faelligkeit: 'erbfall', nurErsterErbfall: false, maxNachlassAnteil: nb.laengerlebenderAbgesichert === false ? undefined : nb.absicherung === 'hoch' ? 1 / 3 : 0.5 });
     }
     if (!einheitlich) {
       for (const a of fall.vermoegen) {
@@ -159,7 +159,7 @@ function bausteinTestament(fall) {
   if (ehepaar) {
     texte.push(`Gegenseitige Erbeinsetzung, Schlusserben ${namen(fall, Object.keys(ziel))}.`);
     if (kinderImZiel.length) {
-      texte.push(`Beim ersten Erbfall erhalten ${namen(fall, kinderImZiel)} Vermächtnisse bis zu ihrem Freibetrag${nb.laengerlebenderAbgesichert === false ? '' : ', zusammen höchstens die Hälfte des Nachlasses'}.`);
+      texte.push(`Beim ersten Erbfall erhalten ${namen(fall, kinderImZiel)} Vermächtnisse bis zu ihrem Freibetrag${nb.laengerlebenderAbgesichert === false ? '' : nb.absicherung === 'hoch' ? ', zusammen höchstens ein Drittel des Nachlasses' : ', zusammen höchstens die Hälfte des Nachlasses'}.`);
       hinweise.push('Der Längerlebende bestimmt Gegenstand, Anteile und Zeitpunkt nach billigem Ermessen, spätestens drei Jahre nach dem ersten Erbfall; ohne diese Frist wäre das Vermächtnis erst bei seinem Tod fällig (§ 2181 BGB, § 6 Abs. 4 ErbStG).');
     }
   } else {
@@ -699,8 +699,15 @@ export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3, budget = B
     .map((x) => x.v);
   const alleVorstufen = [...vorstufen, ...besteAusgleich];
 
-  // 2. Lebzeitige Optionen bei zu vielen Kombinationen vorab ausdünnen (ohne Vorstufe gerechnet)
-  let lebzeiten = STUFE_LEBZEITEN;
+  // 2. Lebzeitige Optionen nach Rahmenbedingung (Umfang der Übertragungen zu Lebzeiten, Absicherung des Längerlebenden)
+  //    und bei zu vielen Kombinationen vorab ausdünnen (ohne Vorstufe gerechnet)
+  const nbL = fall.ziel?.nebenbedingungen || {};
+  let lebzeiten = STUFE_LEBZEITEN.filter((l) => {
+    if (nbL.lebzeiten === 'nichts') return l.length === 0;
+    if (nbL.lebzeiten === 'freibetraege' && l.some((key) => key === 'S' || key === 'H')) return false;
+    if (nbL.absicherung === 'hoch' && l.some((key) => key === 'S' || key === 'H')) return false;
+    return true;
+  });
   const anzahl = () => summe(alleVorstufen, (v) => produkt(v, lebzeiten).length);
   if (anzahl() > budget) {
     const rang = lebzeiten.map((l) => ({ l, best: Math.min(...[['T', ...l], l].map((kb) => rechne(kb, bausteine)?.r.erwartet ?? Infinity)) }))
@@ -835,6 +842,8 @@ export function fehlendeBausteine(fall, bausteine, ausgleichVorhanden) {
     ? (gesperrt.length ? 'Alle geeigneten Vermögenswerte sind unter „Optionen“ von Übertragungen ausgenommen.' : 'Es gibt keine Immobilie außer dem Familienheim und kein Depot. Immobilien, die als weiteres Familienheim erfasst sind, zählen erst nach Korrektur der Nutzung.')
     : !schenkungsgutWert.length ? 'Kein Anteil eines Vermögensgebers an einer geeigneten Immobilie oder einem Depot erreicht 100.000 €.'
     : null;
+  if (nb.lebzeiten === 'nichts') { res.push({ key: 'S', titel: 'Übertragungen zu Lebzeiten', grund: 'Unter „Optionen“ ist gewählt, dass zu Lebzeiten nichts an die nächste Generation übergeht.' }); return res; }
+  if (nb.lebzeiten === 'freibetraege' || nb.absicherung === 'hoch') res.push({ key: 'S', titel: 'Schenkung unter Nießbrauchsvorbehalt (vollständig) und Familienheim an Kinder', grund: nb.absicherung === 'hoch' ? 'Bei hoher Absicherung des Längerlebenden werden nur Übertragungen im Rahmen der Freibeträge geprüft.' : 'Unter „Optionen“ ist „im Rahmen der Freibeträge“ gewählt; vollständige Übertragungen werden nicht geprüft.' });
   if (grundS) { fehlt('S', 'Schenkung unter Nießbrauchsvorbehalt', grundS); fehlt('S2', 'Schenkung in Tranchen', grundS); }
   else fehlt('S2', 'Schenkung in Tranchen', 'Die Freibeträge decken die vollständige Übertragung; eine Aufteilung über zehn Jahre bringt nichts.');
   if (!ausgleichVorhanden) {
