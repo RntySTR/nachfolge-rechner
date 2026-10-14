@@ -673,7 +673,7 @@ export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3, budget = B
     const sz = { id: `vorschlag_${kombi.join('')}_${ergebnisse.length}`, name: teile.map((b) => b.titel).join(' + '), schritte, erbfallOptionen };
     let r;
     try { r = bewerteSzenario(fall, sz, k, { ohneKettenpruefung: true }); } catch (e) { return null; }
-    const e = { kombi, teile, sz, r, sig };
+    const e = { kombi, teile, sz, r, sig, verfuegbar };
     ergebnisse.push(e);
     return e;
   };
@@ -758,6 +758,14 @@ export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3, budget = B
       const id = e.sz.schritte.find((s) => s.titel === b.titel)?.id;
       b.texte = b.textNach(voll.laeufe[0]?.erwerbe.find((x) => x.schrittId === id) || null);
     }
+    // Ersparnis zerlegen: Belastung ohne den jeweiligen Baustein (alle anderen bleiben)
+    const zerlegung = e.kombi.map((key) => {
+      const rest = e.kombi.filter((x) => x !== key);
+      // ohne Vermögensausgleich gelten die Bausteine des Ausgangseigentums
+      const ohne = rest.length ? rechne(rest, key === 'V' ? bausteine : e.verfuegbar) : null;
+      const belastungOhne = ohne ? ohne.r.erwartet : rest.length ? null : basis.erwartet;
+      return { key, titel: e.verfuegbar[key]?.titel || key, beitrag: belastungOhne == null ? null : belastungOhne - e.r.erwartet };
+    });
     return {
       id: e.sz.id,
       titel: e.sz.name,
@@ -767,6 +775,9 @@ export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3, budget = B
       szenario: e.sz,
       ergebnis: voll,
       ersparnis: basis.erwartet - voll.erwartet,
+      zerlegung,
+      ampel: ampelFuer(fall, voll, e.kombi),
+      umsetzung: umsetzungshinweise(fall, e.kombi, e.sz),
       verworfen: !!gruende,
       gruende: gruende || []
     };
@@ -802,7 +813,94 @@ export function vorschlaege(fall, { maxAnzahl = 4, mindestAnzahl = 3, budget = B
       liste.push(aufbereiten(e, verwerfungsgruende(e)));
     }
   }
-  return { basis, liste, gerechnet: ergebnisse.length };
+  return { basis, liste, gerechnet: ergebnisse.length, fehlend: fehlendeBausteine(fall, bausteine, ausgleich.length > 0) };
 }
 
 void steuerklasse; void sw;
+
+// ------------------------------------------------------------------ Erklärungen: fehlende Bausteine, Ampel, Umsetzung
+
+/** Warum ein Baustein in dieser Konstellation nicht gebildet wurde (für die Vorschlagsseite). */
+export function fehlendeBausteine(fall, bausteine, ausgleichVorhanden) {
+  const nb = fall.ziel?.nebenbedingungen || {};
+  const g = geberListe(fall);
+  const ehepaar = g.length === 2;
+  const res = [];
+  const fehlt = (key, titel, grund) => { if (!bausteine[key]) res.push({ key, titel, grund }); };
+  const schenkungsgut = fall.vermoegen.filter((a) => istSchenkungsgut(fall, a));
+  const schenkungsgutWert = schenkungsgut.filter((a) => g.some((id) => vw(a) * Number(a.eigentum?.[id] || 0) >= 100000));
+  const heim = fall.vermoegen.find((a) => istFamilienheim(fall, a));
+  const gesperrt = fall.vermoegen.filter((a) => !uebertragbar(fall, a));
+  const grundS = !schenkungsgut.length
+    ? (gesperrt.length ? 'Alle geeigneten Vermögenswerte sind unter „Optionen“ von Übertragungen ausgenommen.' : 'Es gibt keine Immobilie außer dem Familienheim und kein Depot. Immobilien, die als weiteres Familienheim erfasst sind, zählen erst nach Korrektur der Nutzung.')
+    : !schenkungsgutWert.length ? 'Kein Anteil eines Vermögensgebers an einer geeigneten Immobilie oder einem Depot erreicht 100.000 €.'
+    : null;
+  if (grundS) { fehlt('S', 'Schenkung unter Nießbrauchsvorbehalt', grundS); fehlt('S2', 'Schenkung in Tranchen', grundS); }
+  else fehlt('S2', 'Schenkung in Tranchen', 'Die Freibeträge decken die vollständige Übertragung; eine Aufteilung über zehn Jahre bringt nichts.');
+  if (!ausgleichVorhanden) {
+    fehlt('V', 'Vermögensausgleich unter Ehegatten', !ehepaar ? 'Nur bei Ehepaaren.' : grundS ? grundS : 'Das übertragbare Vermögen des reicheren Ehegatten liegt unter 200.000 € oder die Zuwendung bliebe nach Abzug des Nießbrauchs ohne Wert.');
+  }
+  fehlt('H', 'Familienheim an Kinder unter Nießbrauch', !heim ? 'Kein Familienheim erfasst.' : !uebertragbar(fall, heim) ? 'Das Familienheim ist von Übertragungen ausgenommen.' : 'Kein Anteil eines Vermögensgebers am Familienheim erreicht 100.000 € oder es gibt keinen Empfänger außer dem Ehegatten.');
+  fehlt('F', 'Familienheim an den Ehegatten', !ehepaar ? 'Nur bei Ehepaaren.' : !heim ? 'Kein Familienheim erfasst.' : 'Der vermögendere Ehegatte hält keinen übertragbaren Anteil am Familienheim.');
+  fehlt('G', 'Güterstandsschaukel', !ehepaar ? 'Nur bei Ehepaaren.' : (fall.gueterstand || 'zugewinn') !== 'zugewinn' ? 'Die Ehegatten leben nicht in Zugewinngemeinschaft.' : nb.keineSchaukel ? 'Unter „Ausgangslage und Ziel“ ist „Keine Güterstandsschaukel“ gewählt.' : 'Der rechnerische Zugewinnausgleich liegt unter 50.000 €.');
+  fehlt('K', 'Geldschenkung an Kinder', 'Kein Bankguthaben eines Vermögensgebers von mindestens 50.000 €, oder je Kind blieben unter 20.000 €.');
+  fehlt('E', 'Schenkungen an Enkel', !nb.enkelEinbeziehen ? 'Unter „Ausgangslage und Ziel“ ist „Enkel dürfen einbezogen werden“ nicht gewählt.' : !lebend(fall).some((p) => p.rolle === 'enkel') ? 'Keine Enkel erfasst.' : lebend(fall).filter((p) => p.rolle === 'enkel').every((p) => istMinderjaehrig(fall, p.id, addJahre(fall.stichtag, 3 / 12))) ? 'Alle Enkel sind minderjährig; lebzeitige Schenkungen werden nicht vorgeschlagen (Vermächtnisse im Erbvertrag bleiben möglich).' : 'Kein Geld oder Depot eines Vermögensgebers von mindestens 50.000 €.');
+  fehlt('P', 'Pflichtteil nach dem ersten Erbfall', !ehepaar ? 'Nur bei Ehepaaren.' : !lebend(fall).some((p) => p.rolle === 'kind') ? 'Keine Kinder erfasst.' : 'Setzt ein bestehendes gegenseitiges Ehegattentestament voraus; mit neuem Erbvertrag werden stattdessen Freibetragsvermächtnisse vorgeschlagen.');
+  fehlt('A', 'Ausschlagung des Längerlebenden', !ehepaar ? 'Nur bei Ehepaaren.' : nb.laengerlebenderAbgesichert !== false ? 'Nur wenn unter „Ausgangslage und Ziel“ die Absicherung des Längerlebenden nicht verlangt ist.' : 'Die Ehegatten leben nicht in Zugewinngemeinschaft.');
+  fehlt('T', 'Erbvertrag mit Freibetragsvermächtnissen', 'Kein Gestaltungsziel und keine Kinder, aus denen sich Erben ergeben.');
+  return res;
+}
+
+const ROT = ['Kettenschenkungsrisiko', 'Vermächtnisse gekürzt', 'Schritt übersprungen', 'Keine Erben', 'Güterstandsschaukel nicht möglich'];
+
+/** Ampel je Vorschlag aus den Hinweisen beider Sterbereihenfolgen und der Zielprüfung. */
+export function ampelFuer(fall, ergebnis, kombi = []) {
+  const gruende = new Map();
+  const add = (stufe, titel, text) => { if (!gruende.has(titel)) gruende.set(titel, { stufe, titel, text }); };
+  if (zielStatus(ergebnis.ziel) === false) add('rot', 'Gestaltungsziel verfehlt', 'Das Vermögen liegt am Ende nicht wie gewünscht verteilt.');
+  for (const l of ergebnis.laeufe) {
+    for (const h of l.hinweise) {
+      if (h.stufe !== 'risiko' && h.stufe !== 'warnung') continue;
+      if (h.titel === 'Kettenschenkungsrisiko') { add(h.mehrsteuer > 0 ? 'rot' : 'gelb', h.titel, h.mehrsteuer > 0 ? `Bei Umqualifizierung Mehrsteuer von ${fmtEuro(h.mehrsteuer)}.` : 'Unter den Annahmen ohne Mehrsteuer; Abstand und eigene Entscheidung des Zwischenerwerbers sichern.'); continue; }
+      if (h.titel === 'Pflichtteilsergänzung' && h.betrag != null) { add(h.betrag > 0 ? 'gelb' : 'gruen', h.titel, h.text); continue; }
+      add(ROT.includes(h.titel) ? 'rot' : 'gelb', h.titel, h.text);
+    }
+  }
+  const liste = [...gruende.values()].filter((g) => g.stufe !== 'gruen');
+  const stufe = liste.some((g) => g.stufe === 'rot') ? 'rot' : liste.length ? 'gelb' : 'gruen';
+  return { stufe, gruende: liste.sort((x, y) => (x.stufe === 'rot' ? 0 : 1) - (y.stufe === 'rot' ? 0 : 1)) };
+}
+
+const UMSETZUNG = {
+  V: ['Zwischen Vermögensausgleich und Weitergabe an die Kinder mindestens ein Jahr Abstand; keine Verpflichtung zur Weitergabe in der Urkunde; eigene Entscheidung des erwerbenden Ehegatten dokumentieren (BFH II R 35/13).', 'Verbindliche Auskunft nach § 89 Abs. 2 AO erwägen, wenn die Weitergabe zeitnah geplant ist.', 'Bei Gegenleistungen mit Grundbesitz § 23 EStG prüfen (Zehnjahresfrist seit Anschaffung).'],
+  S: ['Nießbrauch mit Rückforderungsrecht (Veräußerung, Insolvenz, Vorversterben, Scheidung) und Vormerkung sichern.', 'Pflichtteilsverzicht der Erwerber im selben Termin erwägen; er mindert die Steuer nicht, sichert aber den Längerlebenden.', 'Schenkungsanzeige nach § 30 ErbStG binnen drei Monaten; bei notarieller Urkunde übernimmt sie der Notar (§ 34 ErbStG).'],
+  S2: ['Zweite Tranche frühestens zehn Jahre und einen Tag nach der ersten (§ 14 ErbStG, Fristberechnung nach § 108 AO).', 'Nießbrauch mit Rückforderungsrecht und Vormerkung; die zweite Tranche in derselben Form.', 'Zwischenzeitlicher Tod des Schenkers: die zweite Tranche geht dann im Erbfall über; Testament oder Erbvertrag darauf abstimmen.'],
+  H: ['Statt Nießbrauch kommt ein Wohnungsrecht in Betracht (geringerer Kapitalwert, dafür keine Mieterträge).', 'Die Befreiung des Familienheims im Erbfall (§ 13 Abs. 1 Nr. 4b/4c ErbStG) entfällt; dafür keine Behaltensfrist.', 'Rückforderung bei Vorversterben des Erwerbers vereinbaren.'],
+  F: ['Rückforderungsrecht für Scheidung und Vorversterben; Anrechnung auf den Zugewinnausgleich regeln (§ 1380 BGB).', 'Keine Behaltensfrist bei § 13 Abs. 1 Nr. 4a ErbStG; die Selbstnutzung muss aber im Zeitpunkt der Zuwendung bestehen.', 'Pflichtteilsergänzung: die Zehnjahresfrist beginnt nicht vor Auflösung der Ehe (§ 2325 Abs. 3 S. 3 BGB).'],
+  G: ['Gütertrennung, Ausgleich und Rückkehr zur Zugewinngemeinschaft in einer Urkunde sind steuerlich anerkannt (BFH II R 29/02).', 'Anfangs- und Endvermögen beider Ehegatten dokumentieren; Erfüllung in Geld bevorzugen, Immobilien an Erfüllungs statt lösen § 23 EStG aus.', 'Pflichtteilsfestigkeit nicht abschließend geklärt; Abstand zu lebzeitigen Schenkungen halten.'],
+  T: ['Erfüllungsfrist der Freibetragsvermächtnisse höchstens drei Jahre nach dem ersten Erbfall; sonst Erwerb vom Längerlebenden (§ 6 Abs. 4 ErbStG).', 'Ersatzbestimmungsberechtigten für die Vermächtnisse benennen; Pflichtteilsstrafklausel nur gegen Geltendmachung gegen den Willen des Längerlebenden.', 'Erbvertrag mit Rücktritts- oder Änderungsvorbehalt für den Längerlebenden erwägen.'],
+  P: ['Geltendmachung innerhalb von drei Jahren (§§ 195, 199 BGB); Stundung ist möglich, die Erfüllung muss vor dem Tod des Längerlebenden erfolgen (BFH II R 17/16).'],
+  A: ['Ausschlagung binnen sechs Wochen ab Kenntnis (§ 1944 BGB); Ersatzerbenregelung der Verfügung prüfen.'],
+  E: ['Bei minderjährigen Enkeln: Ergänzungspfleger, wenn das Geschäft nicht lediglich rechtlich vorteilhaft ist; Verwaltungsausschluss der Eltern nach § 1638 BGB möglich.'],
+  K: ['Schenkungsanzeige nach § 30 ErbStG binnen drei Monaten; der Freibetrag ist ab der Schenkung für zehn Jahre verbraucht.']
+};
+
+/** Umsetzungshinweise: Urkundenreihenfolge aus den Schritten und Hinweise je Baustein. */
+export function umsetzungshinweise(fall, kombi, sz) {
+  // Schritte desselben Tages und Schenkers bilden eine Urkunde
+  const gruppen = new Map();
+  for (const s of (sz.schritte || []).filter((x) => x.datum).slice().sort((x, y) => x.datum.localeCompare(y.datum))) {
+    const key = `${s.datum}|${s.typ}|${s.von || ''}`;
+    if (!gruppen.has(key)) gruppen.set(key, { datum: s.datum, typ: s.typ, von: s.von || null, schritte: [] });
+    gruppen.get(key).schritte.push(s);
+  }
+  const urkunden = [...gruppen.values()].map((g, i) => {
+    const empf = [...new Set(g.schritte.flatMap((s) => Object.keys(s.empfaenger || {})))];
+    const titel = g.typ === 'schenkung'
+      ? `${g.schritte.length === 1 ? (g.schritte[0].titel || 'Überlassung') : `Überlassung (${g.schritte.length} Objekte)`}: ${name(fall, g.von)} → ${namen(fall, empf)}`
+      : g.schritte[0].titel || g.typ;
+    return { nr: i + 1, datum: g.datum, titel, typ: g.typ, anzahl: g.schritte.length };
+  });
+  const hinweise = kombi.flatMap((key) => (UMSETZUNG[key] || []).map((text) => ({ key, text })));
+  return { urkunden, hinweise };
+}

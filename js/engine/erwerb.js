@@ -2,7 +2,7 @@
 // Steuerübernahme (§ 10 Abs. 2 ErbStG), Ermäßigung bei mehrfachem Erwerb (§ 27 ErbStG).
 
 import { RECHTSSTAND as R } from './rechtsstand.js';
-import { steuerNachTarif, steuersatz } from './tarif.js';
+import { steuerNachTarif, steuersatz, tarifDetail } from './tarif.js';
 import { steuerklasse } from './personen.js';
 import { abrunden100, innerhalbJahre, summe, vergleicheDatum } from './util.js';
 
@@ -64,6 +64,7 @@ export function berechneErwerb(fall, erwerb, frueher) {
     return {
       summeVor,
       gesamt,
+      mindest,
       stpfl: stpflGesamt,
       steuerGesamt,
       abzugVorerwerbe: abzug,
@@ -90,8 +91,10 @@ export function berechneErwerb(fall, erwerb, frueher) {
     par27 = Math.floor(Math.min(r.steuer * anteil * prozent, hoechst != null ? hoechst : Infinity));
   }
 
+  const rechenweg = baueRechenweg(erwerb, b, kl, r, { steuerUebernahmeBetrag, bereicherungFinal, par27, vor });
   return {
     ...res,
+    rechenweg,
     bereicherung: bereicherungFinal,
     steuerUebernahmeBetrag,
     vorerwerbe: vor.map((e) => ({ id: e.id, datum: e.datum, bereicherung: e.bereicherung, steuer: e.steuer, titel: e.titel })),
@@ -106,6 +109,61 @@ export function berechneErwerb(fall, erwerb, frueher) {
     steuer: Math.max(0, r.steuer - par27),
     satz: steuersatz(kl.stkl, r.stpfl)
   };
+}
+
+/**
+ * Rechenweg eines Erwerbs als Zeilen {text, betrag, norm, art}. art: 'posten' | 'minus' | 'plus' | 'zwischen' | 'ergebnis' | 'info'.
+ * Reihenfolge entspricht dem Prüfschema: Vermögensanfall → Befreiungen/Lasten → Bereicherung → Zusammenrechnung →
+ * Freibeträge → Abrundung → Tarif (mit Härteausgleich) → Anrechnung Vorerwerbe → § 27 → Steuer.
+ */
+function baueRechenweg(erwerb, b, kl, r, { steuerUebernahmeBetrag, bereicherungFinal, par27, vor }) {
+  const z = [];
+  const add = (art, text, betrag, norm = '') => z.push({ art, text, betrag, norm });
+  for (const p of erwerb.positionen || []) {
+    add('posten', p.text, p.steuerwert, p.norm || '§ 12 ErbStG, § 11 ErbStG');
+    for (const x of p.befreiungen || []) add('minus', x.text, x.betrag, x.norm);
+    for (const x of p.lasten || []) add('minus', x.text, x.betrag, x.norm);
+  }
+  for (const a of erwerb.abzuege || []) add('minus', a.text, a.betrag, a.norm);
+  if (erwerb.steuerfrei) {
+    add('ergebnis', `Steuerfrei: ${erwerb.steuerfreiGrund || ''}`, 0, erwerb.steuerfreiGrund || '');
+    return z;
+  }
+  add('zwischen', 'Bereicherung', b.bereicherung, '§ 10 Abs. 1 ErbStG');
+  if (steuerUebernahmeBetrag) { add('plus', 'Vom Schenker übernommene Steuer', steuerUebernahmeBetrag, '§ 10 Abs. 2 ErbStG'); add('zwischen', 'Bereicherung einschließlich übernommener Steuer', bereicherungFinal); }
+  if (r.pflege) add('minus', 'Pflegefreibetrag', r.pflege, '§ 13 Abs. 1 Nr. 9 ErbStG');
+  if (vor.length) {
+    for (const v of vor) add('plus', `Vorerwerb ${v.datum.slice(8, 10)}.${v.datum.slice(5, 7)}.${v.datum.slice(0, 4)}: ${v.titel || v.art || 'Zuwendung'}`, v.bereicherung, '§ 14 Abs. 1 S. 1 ErbStG');
+    add('zwischen', 'Gesamterwerb (Zusammenrechnung)', r.gesamt, '§ 14 Abs. 1 ErbStG');
+  }
+  add('minus', `Persönlicher Freibetrag (${kl.beziehung}, Steuerklasse ${kl.stkl})`, Math.min(kl.freibetrag, Math.max(0, r.gesamt - r.pflege)), '§ 16 Abs. 1 ErbStG');
+  if (erwerb.versorgungsfreibetrag) add('minus', 'Besonderer Versorgungsfreibetrag', r.sonderFbGenutzt, '§ 17 ErbStG');
+  const vorRundung = Math.max(0, r.gesamt - r.pflege - kl.freibetrag - (erwerb.versorgungsfreibetrag || 0));
+  if (vorRundung - r.stpfl > 0.5) add('minus', 'Abrundung auf volle 100 €', vorRundung - r.stpfl, '§ 10 Abs. 1 S. 6 ErbStG');
+  add('zwischen', 'Steuerpflichtiger Erwerb', r.stpfl, '§ 10 Abs. 1 ErbStG');
+  const t = tarifDetail(kl.stkl, r.stpfl);
+  if (r.stpfl > 0) {
+    add('info', `Steuersatz ${Math.round(t.satz * 100)} % (Steuerklasse ${kl.stkl}, Stufe bis ${t.grenzeOben === Infinity ? 'unbegrenzt' : t.grenzeOben.toLocaleString('de-DE') + ' €'})`, t.steuerTarif, '§ 19 Abs. 1 ErbStG');
+    if (t.haerteausgleich > 0) add('minus', `Härteausgleich (Vorstufe ${Math.round(t.haerte.satzVorstufe * 100)} % bis ${t.haerte.grenze.toLocaleString('de-DE')} € zuzüglich ${t.haerte.faktor === 0.5 ? 'Hälfte' : 'drei Viertel'} des Mehrbetrags)`, t.haerteausgleich, '§ 19 Abs. 3 ErbStG');
+  }
+  if (vor.length) {
+    add('zwischen', 'Steuer auf den Gesamterwerb', r.steuerGesamt, '§ 14 Abs. 1 ErbStG');
+    add('minus', `Anrechnung Steuer auf Vorerwerbe (höherer Betrag aus fiktiver Steuer nach heutigem Recht und tatsächlich gezahlter Steuer)`, r.abzugVorerwerbe, '§ 14 Abs. 1 S. 2, 3 ErbStG');
+    if (r.steuerGesamt - r.abzugVorerwerbe < r.mindest) add('info', 'Mindeststeuer (Steuer auf den Letzterwerb allein)', r.mindest, '§ 14 Abs. 1 S. 4 ErbStG');
+  }
+  if (par27) add('minus', 'Ermäßigung bei mehrfachem Erwerb desselben Vermögens', par27, '§ 27 ErbStG');
+  add('ergebnis', 'Festzusetzende Steuer', Math.max(0, r.steuer - par27), '§ 19 ErbStG');
+  return z;
+}
+
+/** Rechenweg als Text (für Zwischenablage und Export). */
+export function rechenwegText(e, fmt = (x) => `${Math.round(x).toLocaleString('de-DE')} €`) {
+  const kopf = `${e.titel || e.art || 'Erwerb'} · ${e.datum || ''} · von ${e.von} an ${e.an} · StKl ${e.stkl}`;
+  const zeilen = (e.rechenweg || []).map((z) => {
+    const vz = z.art === 'minus' ? '− ' : z.art === 'plus' ? '+ ' : z.art === 'zwischen' || z.art === 'ergebnis' ? '= ' : '  ';
+    return `${vz}${z.text}${z.norm ? ` (${z.norm})` : ''}: ${fmt(z.betrag)}`;
+  });
+  return [kopf, ...zeilen].join('\n');
 }
 
 /** Restfreibetrag des Erwerbers gegenüber dem Zuwendenden zu einem Datum. */

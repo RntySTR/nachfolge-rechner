@@ -3,7 +3,9 @@
 import { state, laden, speichern, fall, holePfad, setzePfad, neuerFall, beispielLaden, fallDuplizieren, fallLoeschen, exportieren, importieren, personEntfernen, vermoegenEntfernen, tutorialMerken, istLeer } from './ui/store.js';
 import { tutorialHtml, TUTORIAL_SEITEN } from './ui/tutorial.js';
 import { ansichtFamilie, ansichtVermoegen, ansichtAusgangslage } from './ui/ansichten.js';
-import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer } from './ui/ergebnisse.js';
+import { ansichtSzenarien, ansichtVergleich, ergebnisse, vorschlaegeFuer, setzeNeuzeichnen, kopfzahlen, pruefbericht, rechenwegAlsText, ampelPunkt } from './ui/ergebnisse.js';
+import { befundeJeAnsicht } from './engine/pruefung.js';
+import { euro } from './ui/format.js';
 import { sheetInhalt } from './ui/sheets.js';
 import { mandantenfassung } from './ui/mandant.js';
 import { icon } from './ui/icons.js';
@@ -70,7 +72,7 @@ function render() {
   renderNav(f);
   const idx = Math.max(0, ANSICHTEN.findIndex(([k]) => k === state.ansicht));
   const ansicht = ANSICHTEN[idx];
-  $('#content').innerHTML = ansicht[3](f) + schrittNav(idx);
+  $('#content').innerHTML = kopfbalken(f, ansicht[0]) + ansicht[3](f) + schrittNav(idx);
   $('#mobil-titel').textContent = f.titel || 'Fall';
   renderSheet(f);
   renderTutorial();
@@ -105,6 +107,30 @@ function tutorialSchliessen() {
   state.tutorial = null;
 }
 
+/** Kopfbalken auf jedem Schritt: Ausgangslage, bester Vorschlag, Prüfstand der Eingaben. */
+function kopfbalken(f, ansicht) {
+  if (ansicht === 'vergleich' || istLeer(f)) return '';
+  const k = kopfzahlen(f);
+  const befunde = pruefbericht(f);
+  const nF = befunde.filter((b) => b.stufe === 'fehler').length, nW = befunde.filter((b) => b.stufe === 'warnung').length;
+  const pruef = nF ? `<span class="kb-pruef fehler">${icon('circle-x', 14)}${nF} ${nF === 1 ? 'Fehler' : 'Fehler'} in den Eingaben</span>` : nW ? `<span class="kb-pruef warnung">${icon('triangle-alert', 14)}${nW} ${nW === 1 ? 'Warnung' : 'Warnungen'}</span>` : befunde.length ? `<span class="kb-pruef hinweis">${icon('info', 14)}${befunde.length} ${befunde.length === 1 ? 'Hinweis' : 'Hinweise'}</span>` : '';
+  if (k.fehlt) return `<div class="kopfbalken leer"><span class="kb-t">${icon('calculator', 16)}Ergebnis erscheint, sobald ${esc(k.fehlt.join(', '))} erfasst ${k.fehlt.length > 1 ? 'sind' : 'ist'}.</span>${pruef}</div>`;
+  const b = k.basis;
+  const best = k.besterVorschlag;
+  const eig = k.eigene;
+  const vorschlag = k.laden
+    ? `<span class="kb-zelle"><span class="lbl">Bester Vorschlag</span><span class="kb-laden"><span class="spinner klein"></span>wird berechnet …</span></span>`
+    : best
+      ? `<span class="kb-zelle"><span class="lbl">Bester Vorschlag ${ampelPunkt(best.ampel)}</span><span class="fig num gut">${euro(best.ergebnis.erwartet)}</span><small>− ${euro(best.ersparnis)}</small></span>`
+      : `<span class="kb-zelle"><span class="lbl">Vorschläge</span><span class="fig">–</span><small>keine Ersparnis gefunden</small></span>`;
+  const eigene = eig ? `<span class="kb-zelle"><span class="lbl">Eigenes Szenario</span><span class="fig num">${euro(eig.erwartet)}</span><small>${esc(eig.sz.name)}</small></span>` : '';
+  return `<button type="button" class="kopfbalken" data-nav="szenarien" title="Zu den Szenarien">
+    <span class="kb-zelle"><span class="lbl">Ohne Gestaltung</span><span class="fig num">${b ? euro(b.erwartet) : '–'}</span><small>Steuern und Kosten, gewichtet</small></span>
+    ${vorschlag}${eigene}
+    <span class="kb-rechts">${pruef}${icon('arrow-right', 16)}</span>
+  </button>`;
+}
+
 function schrittNav(idx) {
   const zurueck = ANSICHTEN[idx - 1];
   const weiter = ANSICHTEN[idx + 1];
@@ -136,9 +162,13 @@ function schrittStand(f, k) {
 
 function renderNav(f) {
   $('#fallwahl').innerHTML = `${icon('folder-open', 20)}<span class="t"><b>${esc(f.titel || 'Ohne Titel')}</b><span>${anzahl(f.personen.length, 'Person', 'Personen', 'f')} · ${anzahl(f.vermoegen.length, 'Wert', 'Werte')}</span></span>${icon('chevron-down', 16)}`;
+  const befunde = istLeer(f) ? {} : befundeJeAnsicht(pruefbericht(f));
   $('#navlist').innerHTML = ANSICHTEN.map(([k, t, ico], i) => {
     const st = schrittStand(f, k);
-    const marke = st.fehlt ? `<span class="stand fehlt" title="${esc(st.fehlt)}" aria-label="${esc(st.fehlt)}"></span>` : st.ok ? `<span class="stand ok" aria-label="vollständig">${icon('check', 14)}</span>` : '';
+    const bf = befunde[k];
+    const marke = bf?.fehler ? `<span class="stand badge fehler" title="${bf.fehler} Fehler in den Eingaben">${bf.fehler}</span>`
+      : bf?.warnung ? `<span class="stand badge warnung" title="${bf.warnung} Warnungen">${bf.warnung}</span>`
+      : st.fehlt ? `<span class="stand fehlt" title="${esc(st.fehlt)}" aria-label="${esc(st.fehlt)}"></span>` : st.ok ? `<span class="stand ok" aria-label="vollständig">${icon('check', 14)}</span>` : '';
     return `<li><button type="button" data-nav="${k}" aria-current="${state.ansicht === k ? 'page' : 'false'}"><span class="n">${icon(ico, 18)}</span><span>${i + 1}&nbsp;${t}</span>${marke}</button></li>`;
   }).join('');
 }
@@ -150,6 +180,7 @@ function renderSheet(f) {
     return;
   }
   const { titel, inhalt, fuss } = sheetInhalt(f, state.sheet);
+  root.classList.toggle('sheet-breit', state.sheet.typ === 'vorschlag');
   $('#sheet-titel').textContent = titel;
   $('#sheet-inhalt').innerHTML = inhalt;
   $('#sheet-fuss').innerHTML = `<div>${fuss || ''}</div><button type="button" class="btn primary" data-act="sheet-schliessen">Fertig</button>`;
@@ -238,6 +269,8 @@ function setzeBindung(pfad, wert, optionen = {}) {
       if (!n.berechtigte?.length) n.berechtigte = [st.von].filter(Boolean);
       n.modus = n.modus || 'sukzessiv';
     }
+    if (/^vermoegen\.\d+\.bewg\.keller$/.test(pfad)) setzePfad(f, pfad, wert !== 'nein');
+    if (/^vermoegen\.\d+\.bewg\.standard$/.test(pfad)) setzePfad(f, pfad, Number(wert));
     if (/^vermoegen\.\d+\.art$/.test(pfad)) {
       const a = holePfad(f, pfad.replace(/\.art$/, ''));
       if (wert !== 'immobilie') a.nutzung = 'sonstige';
@@ -283,6 +316,7 @@ const AKTIONEN = {
     f.vermoegen.push({ id, bezeichnung: '', art: 'immobilie', nutzung, verkehrswert: '', steuerwert: '', jahresertrag: '', verbindlichkeit: '', eigentum: eig });
     state.sheet = { typ: 'vermoegen', id };
   }),
+  'bewg-uebernehmen': (d) => { aendern((f) => { const a = f.vermoegen.find((x) => x.id === d.id); if (a) a.steuerwert = Number(d.wert); }); toast('Steuerwert übernommen'); },
   'vermoegen-bearbeiten': (d) => { state.sheet = { typ: 'vermoegen', id: d.id }; render(); },
   'vermoegen-loeschen': (d) => {
     if (!confirmen('Vermögenswert entfernen?')) return;
@@ -420,6 +454,11 @@ const AKTIONEN = {
     });
     toast('Vorschlag als Szenario übernommen');
   },
+  'vorschlag-ansehen': (d) => { state.sheet = { typ: 'vorschlag', id: d.id }; render(); },
+  'rechenweg-kopieren': async (d) => {
+    const text = rechenwegAlsText(fall(), d.id);
+    try { await navigator.clipboard.writeText(text); toast('Rechenweg kopiert'); } catch (e) { window.prompt('Rechenweg (kopieren mit Strg+C):', text); }
+  },
   'detail-waehlen': (d) => { state.detail.szenarioId = d.id; render(); },
   'details-ansehen': (d) => { state.detail.szenarioId = d.id; state.detail.tab = 'zeitachse'; state.ansicht = 'vergleich'; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
   'szenario-bearbeiten': (d) => { state.szenarioId = d.id; state.ansicht = 'szenarien'; state.sheet = null; speichern(); render(); window.scrollTo(0, 0); },
@@ -542,6 +581,7 @@ document.addEventListener('click', (e) => {
   if (akt && stopp && akt.contains(stopp)) return;
   if (akt && AKTIONEN[akt.dataset.act]) {
     e.preventDefault();
+    if (akt.dataset.navVor) { state.ansicht = akt.dataset.navVor; window.scrollTo(0, 0); }
     AKTIONEN[akt.dataset.act](akt.dataset);
   }
 });
@@ -642,5 +682,6 @@ function ehepaarUmschalten(ehepaar) {
 // ------------------------------------------------------------------ Start
 
 laden();
+setzeNeuzeichnen(() => render());
 render();
 if (state.speicherFehler) toast('Dieser Browser erlaubt keine lokale Speicherung. Bitte den Fall als Datei sichern.');

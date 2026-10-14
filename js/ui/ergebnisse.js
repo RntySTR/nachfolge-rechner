@@ -10,6 +10,8 @@ import { summe } from '../engine/util.js';
 import { bewerteSzenario, kontextFuer, zielStatus } from '../engine/auswertung.js';
 import { vorschlaege, uebertragbar } from '../engine/strategien.js';
 import { RECHTSSTAND } from '../engine/rechtsstand.js';
+import { rechenwegText } from '../engine/erwerb.js';
+import { pruefeEingaben, hatFehler } from '../engine/pruefung.js';
 import { state } from './store.js';
 
 // ------------------------------------------------------------------ Berechnung
@@ -49,17 +51,58 @@ export function ergebnisse(f) {
   return cache.res;
 }
 
-export function vorschlaegeFuer(f) {
+// Die Vorschlagssuche dauert ein bis vier Sekunden. Sie läuft verzögert, damit die Seite zuerst mit
+// Ladezustand erscheint; danach wird neu gezeichnet (Rückruf aus app.js).
+let neuzeichnen = () => {};
+export function setzeNeuzeichnen(fn) { neuzeichnen = fn; }
+let laufend = null;
+
+export function vorschlaegeFuer(f, { sofort = false } = {}) {
   const { szenarien, ...rest } = f;
   const key = JSON.stringify(rest) + JSON.stringify(szenarien.find((s) => s.basis) || {});
   if (cacheVorschlaege.key === key) return cacheVorschlaege.res;
-  let res;
-  if (fehlendeAngaben(f).length) res = { liste: [], fehlt: true };
-  else {
+  if (fehlendeAngaben(f).length) { cacheVorschlaege = { key, res: { liste: [], fehlt: true } }; return cacheVorschlaege.res; }
+  const rechne = () => {
+    let res;
     try { res = vorschlaege(f); } catch (e) { console.error(e); res = { liste: [], fehler: e.message }; }
+    cacheVorschlaege = { key, res };
+    return res;
+  };
+  if (sofort) return rechne();
+  if (laufend !== key) {
+    laufend = key;
+    const kopie = JSON.parse(JSON.stringify(f));
+    setTimeout(() => {
+      if (laufend !== key) return;
+      let res;
+      try { res = vorschlaege(kopie); } catch (e) { console.error(e); res = { liste: [], fehler: e.message }; }
+      cacheVorschlaege = { key, res };
+      laufend = null;
+      neuzeichnen();
+    }, 30);
   }
-  cacheVorschlaege = { key, res };
+  return { liste: [], laden: true };
+}
+
+let cachePruefung = { key: null, res: null };
+export function pruefbericht(f) {
+  const key = JSON.stringify(f);
+  if (cachePruefung.key === key) return cachePruefung.res;
+  let res;
+  try { res = pruefeEingaben(f); } catch (e) { console.error(e); res = []; }
+  cachePruefung = { key, res };
   return res;
+}
+
+/** Kennzahlen für den Kopfbalken: Ausgangslage, bester Vorschlag bzw. bestes eigenes Szenario. */
+export function kopfzahlen(f) {
+  const res = ergebnisse(f);
+  if (res.fehlt) return { fehlt: res.fehlt };
+  const basis = res.szenarien.find((r) => r.sz.basis && !r.fehler);
+  const v = vorschlaegeFuer(f);
+  const besterVorschlag = (v.liste || []).filter((x) => !x.verworfen)[0] || null;
+  const eigene = res.szenarien.filter((r) => !r.sz.basis && !r.fehler).sort((x, y) => (zielStatus(x.ziel) === false) - (zielStatus(y.ziel) === false) || x.erwartet - y.erwartet)[0] || null;
+  return { basis, besterVorschlag, eigene, laden: !!v.laden, befunde: pruefbericht(f) };
 }
 
 function laufLabel(f, lauf) {
@@ -124,6 +167,7 @@ export function ansichtSzenarien(f) {
 
   return `${kopf}
     ${annahmeZeile(f, res)}
+    ${pruefberichtPanel(f)}
     ${basisTeil}
     ${vorschlagsBereich(f, res)}
     <section class="abschnitt">
@@ -131,6 +175,25 @@ export function ansichtSzenarien(f) {
       ${eigene.length ? `<div class="szenario-layout"><nav class="szenarioliste" aria-label="Szenarien">${liste}</nav><div>${editor}</div></div>`
         : `<p class="muted">Noch kein eigenes Szenario. Einen Vorschlag übernehmen oder mit „Eigenes Szenario“ selbst anlegen.</p>`}
     </section>`;
+}
+
+const STUFEN_PRUEF = { fehler: ['Fehler', 'risiko', 'circle-x'], warnung: ['Warnungen', 'warnung', 'triangle-alert'], hinweis: ['Hinweise', 'info', 'info'] };
+const ANSICHT_NAME = { familie: 'Familie', vermoegen: 'Vermögen', ausgangslage: 'Ausgangslage und Ziel', szenarien: 'Szenarien' };
+
+/** Prüfbericht zu den Eingaben: aufklappbare Liste mit Sprung zur betroffenen Stelle. */
+export function pruefberichtPanel(f, { kompakt = false } = {}) {
+  const b = pruefbericht(f);
+  if (!b.length) return kompakt ? '' : `<div class="pruef ok">${icon('circle-check', 18)}<span>Eingaben geprüft: keine Auffälligkeiten.</span></div>`;
+  const n = { fehler: 0, warnung: 0, hinweis: 0 };
+  b.forEach((x) => n[x.stufe]++);
+  const zusammenfassung = ['fehler', 'warnung', 'hinweis'].filter((k) => n[k]).map((k) => `<span class="pruef-zahl ${k}">${n[k]} ${n[k] === 1 ? STUFEN_PRUEF[k][0].replace(/en$|e$/, '') : STUFEN_PRUEF[k][0]}</span>`).join('');
+  const zeilen = b.map((x) => {
+    const ziel = x.assetId ? { act: 'vermoegen-bearbeiten', id: x.assetId } : x.personId ? { act: 'person-bearbeiten', id: x.personId } : null;
+    const nav = ziel ? `data-act="${ziel.act}" data-id="${ziel.id}" data-nav-vor="${x.ansicht}"` : `data-nav="${x.ansicht}"`;
+    return `<button type="button" class="pruef-zeile ${x.stufe}" ${nav}>${icon(STUFEN_PRUEF[x.stufe][2], 16)}<span><b>${esc(x.titel)}</b> ${esc(x.text)}</span><small>${esc(ANSICHT_NAME[x.ansicht] || x.ansicht)}</small></button>`;
+  }).join('');
+  const titel = n.fehler ? 'Eingaben prüfen: die Berechnung ist unvollständig oder falsch' : n.warnung ? 'Eingaben prüfen: das Ergebnis ist wahrscheinlich verzerrt' : 'Hinweise zu den Eingaben';
+  return aufklapp('pruefbericht', `<span class="pruef-titel ${n.fehler ? 'fehler' : n.warnung ? 'warnung' : 'hinweis'}">${icon(n.fehler ? 'circle-x' : n.warnung ? 'triangle-alert' : 'info', 18)}<span>${esc(titel)}</span>${zusammenfassung}</span>`, `<div class="pruef-liste">${zeilen}</div>`, { cls: 'pruef', offen: !!n.fehler });
 }
 
 function fehlerBox(r) {
@@ -220,7 +283,9 @@ function vorschlagsBereich(f, res) {
     <div class="chips">${f.vermoegen.map((a) => `<button type="button" class="chip ohneavatar" data-toggle-liste="ziel.nebenbedingungen.nichtUebertragen" data-wert="${a.id}" aria-pressed="${!nicht.has(a.id)}">${icon(assetIcon(a), 16)} ${esc(a.bezeichnung || 'Vermögenswert')}</button>`).join('')}
       <button type="button" class="btn ghost klein" data-act="uebertragbar" data-art="alle">Alle</button><button type="button" class="btn ghost klein" data-act="uebertragbar" data-art="immobilien">Nur Immobilien</button></div>
   </div>` : '';
-  if (!v.liste?.length || !offen) return `<section class="vorschlaege">${kopf}${auswahlAssets}</section>`;
+  if (v.laden) return `<section class="vorschlaege">${kopf}${auswahlAssets}<div class="laden" role="status"><span class="spinner"></span><span>Gestaltungen werden durchgerechnet …</span></div></section>`;
+  const fehlend = v.fehlend?.length ? aufklapp('vs-fehlend', `<span class="bs-hinweise-t">Nicht geprüfte Bausteine (${v.fehlend.length}) – warum</span>`, `<ul class="bs-hinweise">${v.fehlend.map((x) => `<li><b>${esc(x.titel)}:</b> ${esc(x.grund)}</li>`).join('')}</ul>`, { cls: 'bs-hinweise-wrap vs-fehlend' }) : '';
+  if (!v.liste?.length || !offen) return `<section class="vorschlaege">${kopf}${auswahlAssets}${fehlend}</section>`;
   const uebernommen = new Set(f.szenarien.map((s) => s.vorschlagId).filter(Boolean));
   const n = v.liste.length;
   // Bausteine über alle Vorschläge: gemeinsame zuerst, dann nach Häufigkeit
@@ -256,7 +321,7 @@ function vorschlagsBereich(f, res) {
     const zs = zielStatus(x.ergebnis.ziel);
     // Vorzeichen: „−“ Ersparnis, „+“ Mehrbelastung gegenüber ohne Gestaltung
     const vorzeichen = x.ersparnis > 0.5 ? '− ' : x.ersparnis < -0.5 ? '+ ' : '';
-    return `<th scope="col" class="vs-spalte${i === 0 && !x.verworfen ? ' erste' : ''}${x.verworfen ? ' verworfen' : ''}"><span class="vs-nr">${spaltenName(i)}</span><span class="vs-fig num">${vorzeichen}${euro(Math.abs(x.ersparnis))}</span><span class="vs-lbl">Belastung ${euro(x.ergebnis.erwartet)}${zs === false ? ' · <span class="ziel-nein">Ziel nicht erreicht</span>' : ''}</span></th>`;
+    return `<th scope="col" class="vs-spalte${i === 0 && !x.verworfen ? ' erste' : ''}${x.verworfen ? ' verworfen' : ''}"><span class="vs-nr">${spaltenName(i)}${ampelPunkt(x.ampel)}</span><span class="vs-fig num">${vorzeichen}${euro(Math.abs(x.ersparnis))}</span><span class="vs-lbl">Belastung ${euro(x.ergebnis.erwartet)}${zs === false ? ' · <span class="ziel-nein">Ziel nicht erreicht</span>' : ''}</span><button type="button" class="btn ghost klein vs-konzept" data-act="vorschlag-ansehen" data-id="${x.id}">${icon('book-open', 14)}Konzept lesen</button></th>`;
   }).join('');
   // Grund der Verwerfung immer sichtbar, nicht hinter „Steuer, Kosten und Hinweise“
   const gruendeZeile = anzahlVerworfen
@@ -276,7 +341,55 @@ function vorschlagsBereich(f, res) {
         ? aktionsknopf('vorschlag-uebernehmen', 'Übernommen', { cls: 'klein ist-uebernommen', ico: 'check', daten: { id: x.id } }).replace('<button ', '<button aria-pressed="true" title="Erneut antippen: Szenario wieder entfernen" ')
         : aktionsknopf('vorschlag-uebernehmen', 'Als Szenario übernehmen', { cls: `${x.verworfen ? '' : 'primary '}klein`, daten: { id: x.id } }).replace('<button ', '<button aria-pressed="false" ')}</td>`).join('')}</tr>
     </tbody></table></div>`;
-  return `<section class="vorschlaege">${kopf}${auswahlAssets}${matrix}</section>`;
+  return `<section class="vorschlaege">${kopf}${auswahlAssets}${matrix}${fehlend}</section>`;
+}
+
+const AMPEL_TEXT = { gruen: 'ohne besondere Risiken', gelb: 'mit Prüfpunkten', rot: 'mit erheblichen Risiken' };
+export function ampelPunkt(ampel) {
+  if (!ampel) return '';
+  return `<span class="ampel ${ampel.stufe}" title="${esc(AMPEL_TEXT[ampel.stufe])}${ampel.gruende?.length ? ': ' + esc(ampel.gruende.map((g) => g.titel).join(', ')) : ''}" aria-label="${esc(AMPEL_TEXT[ampel.stufe])}"></span>`;
+}
+
+// ------------------------------------------------------------------ Konzept eines Vorschlags (Sheet)
+
+/** Erzählende Darstellung eines Vorschlags: Ablauf, Ersparnis-Zerlegung, Risiken, Umsetzung. */
+export function sheetVorschlag(f, id) {
+  const v = vorschlaegeFuer(f);
+  const x = (v.liste || []).find((y) => y.id === id);
+  if (!x) return { titel: 'Vorschlag', inhalt: '<p class="muted">Der Vorschlag wird neu berechnet. Bitte das Fenster schließen und erneut öffnen.</p>' };
+  const r = x.ergebnis;
+  const uebernommen = f.szenarien.some((s) => s.vorschlagId === x.id);
+  const zs = zielStatus(r.ziel);
+  const kopf = `<div class="vs-sheet-kopf">
+    <div class="kacheln">
+      <div class="kachel"><span class="lbl">Ersparnis gegenüber ohne Gestaltung</span><span class="fig num ${x.ersparnis > 0 ? 'gut' : ''}">${x.ersparnis > 0.5 ? '− ' : x.ersparnis < -0.5 ? '+ ' : ''}${euro(Math.abs(x.ersparnis))}</span></div>
+      <div class="kachel"><span class="lbl">Steuern und Kosten, gewichtet</span><span class="fig num">${euro(r.erwartet)}</span></div>
+      <div class="kachel"><span class="lbl">Gestaltungsziel</span><span class="fig ${zielKlasse(zs)}" style="font-size:22px">${zielText(zs)}</span></div>
+      <div class="kachel"><span class="lbl">Risiken</span><span class="fig" style="font-size:18px;display:flex;align-items:center;gap:8px">${ampelPunkt(x.ampel)}${esc(AMPEL_TEXT[x.ampel?.stufe] || '')}</span></div>
+    </div>
+    ${x.verworfen ? `<div class="hinweis warnung">${icon('circle-alert', 20)}<div><div class="tt">Verworfen</div><div class="tx">${x.gruende.map(esc).join('; ')}</div></div></div>` : ''}
+  </div>`;
+  const konzept = `<div class="gruppe"><div class="gt">Das Konzept in Kürze</div><ol class="konzept">${x.module.map((m) => `<li><b>${esc(m.titel)}.</b> ${esc(m.texte?.[0] || '')}</li>`).join('')}</ol></div>`;
+  const ablaufHtml = `<div class="gruppe"><div class="gt">So läuft es ab</div>${ablauf(f, x.szenario, -1, r)}<p class="small muted" style="margin-top:8px">Ereignis antippen für Erwerbe, Freibeträge und Steuer je Person. Erbfälle nach ${esc(annahmeText(f))}; gezeigt ist die wahrscheinlichere Reihenfolge.</p></div>`;
+  const maxBeitrag = Math.max(1, ...(x.zerlegung || []).map((z) => Math.abs(z.beitrag || 0)));
+  const zerlegung = x.zerlegung?.length ? `<div class="gruppe"><div class="gt">Warum ist das günstiger?</div>
+    <p class="small muted">Belastung, wenn der jeweilige Baustein weggelassen wird und alle anderen bleiben. Die Beiträge ergänzen sich nicht zur Gesamtersparnis, weil Bausteine zusammenwirken.</p>
+    <div class="zerlegung">${x.zerlegung.map((z) => `<div class="zl"><span class="zl-t">${esc(z.titel)}</span><span class="zl-balken"><i style="width:${Math.round((Math.abs(z.beitrag || 0) / maxBeitrag) * 100)}%" class="${(z.beitrag || 0) < 0 ? 'neg' : ''}"></i></span><span class="zl-w num">${z.beitrag == null ? '–' : `${z.beitrag >= 0 ? 'ohne: + ' : 'ohne: − '}${euro(Math.abs(z.beitrag))}`}</span></div>`).join('')}</div>
+  </div>` : '';
+  const risiken = `<div class="gruppe"><div class="gt">Risiken und Prüfpunkte</div>${x.ampel?.gruende?.length ? `<div class="hinweise">${x.ampel.gruende.map((g) => `<div class="hinweis ${g.stufe === 'rot' ? 'risiko' : 'warnung'}">${icon(g.stufe === 'rot' ? 'triangle-alert' : 'circle-alert', 20)}<div><div class="tt">${esc(g.titel)}</div><div class="tx">${esc(g.text)}</div></div></div>`).join('')}</div>` : '<p class="small muted">Keine Risikohinweise aus der Berechnung. Zivilrecht, Pflichtteilsrechte und die Interessen der Beteiligten sind gesondert zu prüfen.</p>'}</div>`;
+  const u = x.umsetzung || { urkunden: [], hinweise: [] };
+  const umsetzung = `<div class="gruppe"><div class="gt">Umsetzung</div>
+    ${u.urkunden.length ? `<ol class="urkunden">${u.urkunden.map((k) => `<li><span class="datum">${datum(k.datum)}</span><span>${esc(k.titel)}</span></li>`).join('')}</ol>` : ''}
+    ${u.hinweise.length ? `<ul class="bs-hinweise">${u.hinweise.map((h) => `<li>${esc(h.text)}</li>`).join('')}</ul>` : ''}
+  </div>`;
+  const bausteine = `<div class="gruppe"><div class="gt">Bausteine im Einzelnen</div><div class="bs-liste">${x.module.map((m) => bausteinKarte(`vsheet:${x.id}:${m.key}`, m)).join('')}</div></div>`;
+  return {
+    titel: x.titel,
+    inhalt: kopf + konzept + ablaufHtml + zerlegung + risiken + umsetzung + bausteine,
+    fuss: uebernommen
+      ? aktionsknopf('vorschlag-uebernehmen', 'Übernommen – wieder entfernen', { ico: 'check', cls: 'klein', daten: { id: x.id } })
+      : aktionsknopf('vorschlag-uebernehmen', 'Als Szenario übernehmen', { ico: 'plus', cls: 'klein primary', daten: { id: x.id } })
+  };
 }
 
 // ------------------------------------------------------------------ Ablauf mit Steuern je Ereignis
@@ -291,7 +404,7 @@ function gewaehlterLauf(r) {
 }
 
 /** `bearbeiten`: schlanke Schrittliste mit Stift (Schritt 4); sonst Ereignisse mit Steuer und Kosten (Schritt 5). */
-function ablauf(f, sz, idx, r, { bearbeiten = false } = {}) {
+export function ablauf(f, sz, idx, r, { bearbeiten = false } = {}) {
   const lauf = r?.laeufe ? gewaehlterLauf(r) : null;
   const schrittIndex = new Map(sz.schritte.map((s, j) => [s.id, j]));
   const ereignisse = lauf ? [...lauf.zeitachse] : [];
@@ -324,7 +437,7 @@ function ereignisKarte(f, sz, idx, lauf, e, schrittIndex, bearbeiten = false) {
   const key = `${sz.id}:${e.ereignis || e.schrittId}`;
   const offen = !!state.offenSz?.[key];
   const zahler = [...new Set(erw.filter((x) => x.steuer > 0).map((x) => x.an))];
-  const empfaenger = Object.entries(fluss).filter(([, d]) => d > 0).sort((x, y) => y[1] - x[1]);
+  const empfaenger = Object.entries(fluss).filter(([, d]) => d >= 50).sort((x, y) => y[1] - x[1]);
   return `<div class="ereignis ablauf${e.typ === 'erbfall' ? ' erbfall' : ''}${offen ? ' offen' : ''}" data-act="ereignis-umschalten" data-id="${esc(key)}" role="button" tabindex="0" aria-expanded="${offen}">
     <div class="ab-kopf">
       <div><div class="datum">${e.datum ? datum(e.datum) : 'ohne Datum'}${e.typ === 'erbfall' ? ' · angenommen' : ''}</div><div class="tt">${esc(e.titel || '')}</div><div class="tx">${esc(e.text || '')}</div>
@@ -459,7 +572,7 @@ export function ansichtVergleich(f) {
   </details>`;
 
   return `${kopf}${annahmen}${hero}${diagramm}${detail(f, res, detailId)}
-    <p class="small muted" style="margin-top:32px;max-width:760px">Rechtsstand ${datum(RECHTSSTAND.stand)}. ${RECHTSSTAND.hinweise.map(esc).join(' ')} Überschlägige Berechnung; keine Einzelfallprüfung. Steuerwerte von Grundbesitz sind Eingaben, keine Bedarfsbewertung.</p>`;
+    <p class="small muted" style="margin-top:32px;max-width:760px">Rechtsstand ${datum(RECHTSSTAND.stand)}. ${RECHTSSTAND.hinweise.map(esc).join(' ')} Überschlägige Berechnung; keine Einzelfallprüfung. Steuerwerte von Grundbesitz sind Eingaben oder Schätzwerte, keine Feststellung.</p>`;
 }
 
 function detail(f, res, id) {
@@ -467,10 +580,11 @@ function detail(f, res, id) {
   if (!r || r.fehler) return '';
   const lauf = gewaehlterLauf(r);
   const gewichtet = r.laeufe.length > 1 && (!state.detail.reihenfolge || state.detail.reihenfolge === 'gewichtet');
-  const tab = ['zeitachse', 'hinweise', 'ziel'].includes(state.detail.tab) ? state.detail.tab : 'zeitachse';
+  const tab = ['zeitachse', 'hinweise', 'ziel', 'pflichtteile'].includes(state.detail.tab) ? state.detail.tab : 'zeitachse';
   const z = zielabgleich(f, lauf);
   const hinweise = lauf.hinweise.slice().sort((a, b) => rang(a.stufe) - rang(b.stufe));
-  const tabs = [['zeitachse', 'Ablauf und Steuern'], ['hinweise', `Hinweise (${hinweise.length})`], ['ziel', 'Gestaltungsziel']];
+  const offenePt = (lauf.pflichtteile || []).filter((p) => p.anspruch > 1000);
+  const tabs = [['zeitachse', 'Ablauf und Steuern'], ['hinweise', `Hinweise (${hinweise.length})`], ['pflichtteile', `Pflichtteile${offenePt.length ? ` (${offenePt.length})` : ''}`], ['ziel', 'Gestaltungsziel']];
 
   let inhalt = '';
   if (tab === 'zeitachse') {
@@ -479,6 +593,8 @@ function detail(f, res, id) {
       <p class="small muted" style="margin-top:4px">Kosten überschlägig nach GNotKG (Tabelle B) einschließlich 19 % Umsatzsteuer auf Notargebühren und Auslagen; Grundbuch- und Gerichtsgebühren ohne Umsatzsteuer.</p>`;
   } else if (tab === 'hinweise') {
     inhalt = `<div class="hinweise">${hinweise.map(hinweisBox).join('') || '<p class="muted">Keine Hinweise.</p>'}</div>`;
+  } else if (tab === 'pflichtteile') {
+    inhalt = pflichtteilTabelle(f, lauf);
   } else {
     inhalt = zielTabelle(f, z);
   }
@@ -498,12 +614,30 @@ function detail(f, res, id) {
   </section>`;
 }
 
+/** Latente Pflichtteils- und Ergänzungsansprüche je Erbfall (§§ 2303, 2325–2327 BGB), ohne Geltendmachung. */
+function pflichtteilTabelle(f, lauf) {
+  const zeilen = (lauf.pflichtteile || []);
+  if (!zeilen.length) return '<p class="muted">Keine Pflichtteilsberechtigten ohne Verzicht.</p>';
+  const erbfaelle = [...new Set(zeilen.map((z) => z.erblasser))];
+  return erbfaelle.map((erbl) => {
+    const zs = zeilen.filter((z) => z.erblasser === erbl);
+    return `<h3 style="margin:14px 0 8px">Nach dem Tod von ${esc(nameVon(f, erbl))} (${datum(zs[0].datum)})</h3>
+    <div class="tabellen-wrap"><table class="tabelle"><thead><tr><th>Berechtigt</th><th class="r">Quote</th><th class="r">Nachlass</th><th class="r">Schenkungen an andere¹</th><th class="r">Eigene Schenkungen¹</th><th class="r">Erhalten von Todes wegen</th><th class="r">Pflichtteil gesamt²</th><th class="r">davon Ergänzung</th></tr></thead><tbody>
+      ${zs.map((z) => `<tr${z.anspruch > 1000 ? ' class="pt-offen"' : ''}><td>${esc(nameVon(f, z.person))}${z.istErbe ? '<div class="unter">ist Erbe</div>' : ''}</td><td class="r num">${quote(z.quote)}</td><td class="r num">${euro(z.nachlass)}</td><td class="r num">${euro(z.schenkungenFremd)}</td><td class="r num">${euro(z.schenkungenEigen)}</td><td class="r num">${euro(z.erhalten)}</td><td class="r num"><b>${euro(z.anspruch)}</b></td><td class="r num">${euro(z.ergaenzung)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  }).join('') + `<p class="small muted" style="margin-top:10px">¹ Verkehrswert der Zuwendungen der letzten zehn Jahre nach Abschmelzung um 1/10 je Jahr (§ 2325 Abs. 3 BGB); bei Nießbrauchsvorbehalt und bei Zuwendungen an den Ehegatten läuft die Frist nicht, sie zählen voll. Eigene Zuwendungen werden hinzugerechnet und angerechnet (§ 2327 BGB). ² Pflichtteil einschließlich Ergänzung abzüglich eigener Zuwendungen und dessen, was von Todes wegen zufließt (§ 2326 BGB). Latente Ansprüche; sie entstehen nur bei Geltendmachung und verjähren in drei Jahren. Für den Ehegatten ist der große Pflichtteil angesetzt.</p>`;
+}
+
 function rang(s) {
   return { risiko: 0, warnung: 1, info: 2, annahme: 3 }[s] ?? 4;
 }
 
 export function erwerbDetail(f, e) {
   const zeile = (t, b, minus = false, norm = '') => `<div class="z${minus ? ' minus' : ''}"><span>${esc(t)}${norm ? ` <span class="norm">${esc(norm)}</span>` : ''}</span><span class="num">${euro(b)}</span></div>`;
+  if (e.rechenweg?.length) {
+    const zeilen = e.rechenweg.map((z) => `<div class="z ${z.art}"><span>${esc(z.text)}${z.norm ? ` <span class="norm">${esc(z.norm)}</span>` : ''}</span><span class="num">${z.art === 'minus' ? '− ' : z.art === 'plus' ? '+ ' : ''}${euro(Math.abs(z.betrag))}</span></div>`).join('');
+    return `<div class="erwerb-detail rechenweg">${zeilen}<div class="rw-fuss">${aktionsknopf('rechenweg-kopieren', 'Rechenweg kopieren', { ico: 'copy', cls: 'klein ghost', daten: { id: e.id } })}</div></div>`;
+  }
   const teile = [];
   for (const p of e.positionen || []) {
     teile.push(zeile(p.text, p.steuerwert));
@@ -542,3 +676,18 @@ function zielTabelle(f, z) {
   const verteil = (o) => Object.entries(o).filter(([, q]) => q > 1e-6).map(([id, q]) => `${esc(nameVon(f, id))} ${quote(q)}`).join(', ') || '–';
   return `<div class="tabellen-wrap"><table class="tabelle"><thead><tr><th>Vermögenswert</th><th>Soll</th><th>Ist nach beiden Erbfällen</th><th></th></tr></thead><tbody>${z.zeilen.map((r) => `<tr><td>${esc(f.vermoegen.find((a) => a.id === r.assetId)?.bezeichnung || '')}</td><td>${verteil(r.soll)}</td><td>${verteil(r.ist)}</td><td>${r.ok ? icon('circle-check', 18, 'ziel-ok') : icon('circle-x', 18, 'ziel-nein')}</td></tr>`).join('')}</tbody></table></div>`;
 }
+
+
+/** Rechenweg eines Erwerbs als Text mit Namen (für die Zwischenablage). */
+export function rechenwegAlsText(f, erwerbId) {
+  const res = ergebnisse(f);
+  for (const r of res.szenarien || []) {
+    for (const l of r.laeufe || []) {
+      const e = l.erwerbe.find((x) => x.id === erwerbId);
+      if (e) return rechenwegText({ ...e, von: nameVon(f, e.von), an: nameVon(f, e.an), datum: datum(e.datum) }, (x) => euro(x));
+    }
+  }
+  return '';
+}
+
+void hatFehler;
